@@ -29,6 +29,13 @@ MOCK_EXPERIMENTS = [ # This would translate to a table in our MySQL DB
         "model": "LCCDE",
         "parameters": {"learning_rate": 0.01, "epochs": 10},
         "accuracy": 0.94,
+        "date": "2025-10-20"
+    },
+    {
+        "id": 2,
+        "model": "LCCDE",
+        "parameters": {"learning_rate": 0.001, "epochs": 25},
+        "accuracy": 0.95,
         "date": "2025-10-21"
     }
 ]
@@ -77,6 +84,14 @@ def train_model():
 @app.route("/api/experiments", methods=["GET"])
 def get_experiments():
     return jsonify({"experiments": MOCK_EXPERIMENTS})
+
+# Get details for one experiment by ID (Integrate with MySQL DB once that's up)
+@app.route("/api/experiments/<int:exp_id>", methods=["GET"])
+def get_experiment(exp_id):
+    exp = next((e for e in MOCK_EXPERIMENTS if e["id"] == exp_id), None)
+    if not exp:
+        return jsonify({"error": "Experiment not found"}), 404
+    return jsonify(exp)
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True) # Port 5000 serves our APIs
