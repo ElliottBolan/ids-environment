@@ -11,4 +11,4 @@ def hello_world():
     return jsonify(message="Hello, World!") #Return JSON instead of HTML. It's easier for React to consume
 
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    app.run(port=5000, debug=True) # Port 5000 serves our APIs
