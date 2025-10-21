@@ -48,7 +48,7 @@ def get_model_parameters(model_name):
         return jsonify({"error": "Model not found"}), 404
     return jsonify({"model": model_name, "default_parameters": params})
 
-# Run training & testing for a model with the given parameters
+# Run training & testing for a model with the given parameters (test using Postman)
 @app.route("/api/train", methods=["POST"])
 def train_model():
     data = request.json
@@ -72,6 +72,11 @@ def train_model():
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
     return jsonify(results)
+
+# Get a list of previous experiments (again, will have to modify to account for a MySQL DB)
+@app.route("/api/experiments", methods=["GET"])
+def get_experiments():
+    return jsonify({"experiments": MOCK_EXPERIMENTS})
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True) # Port 5000 serves our APIs
