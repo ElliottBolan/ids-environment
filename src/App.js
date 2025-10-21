@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import logo from './logo.svg';
 import './App.css';
 
+// Port 3000 serves our UI
 function App() {
 
   const [message, setMessage] = useState("");
