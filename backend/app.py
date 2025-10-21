@@ -1,5 +1,6 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 from flask_cors import CORS
+import time
 
 app = Flask(__name__)
 # Allow requests from the React dev server (and others) during development
@@ -22,7 +23,7 @@ MODEL_PARAMETERS = { # TBH I still don't have a good idea of all configurable pa
     }
 }
 
-MOCK_EXPERIMENTS = [
+MOCK_EXPERIMENTS = [ # This would translate to a table in our MySQL DB
     {
         "id": 1,
         "model": "LCCDE",
@@ -46,6 +47,31 @@ def get_model_parameters(model_name):
     if not params:
         return jsonify({"error": "Model not found"}), 404
     return jsonify({"model": model_name, "default_parameters": params})
+
+# Run training & testing for a model with the given parameters
+@app.route("/api/train", methods=["POST"])
+def train_model():
+    data = request.json
+    model = data.get("model")
+    params = data.get("parameters", {})
+    dataset = data.get("dataset", "unknown.csv") # Will likely only be using the CICIDS2017 dataset
+
+    # Fake "training" simulation for the time being
+    print(f"Training {model} with parameters {params} on {dataset}")
+    time.sleep(2)  # simulate training time
+
+    # Return mock results (we will have to integrate the logic from LCCDE_IDS_GlobeCom22.ipynb, but we just need the structure for now)
+    results = {
+        "model": model,
+        "parameters": params,
+        "accuracy": round(0.9 + 0.05 * (time.time() % 1), 3),
+        "precision": 0.89,
+        "recall": 0.88,
+        "f1_score": 0.885,
+        "dataset": dataset,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+    }
+    return jsonify(results)
 
 if __name__ == "__main__":
     app.run(port=5000, debug=True) # Port 5000 serves our APIs
