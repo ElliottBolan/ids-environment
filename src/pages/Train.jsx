@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+// src/pages/Train.jsx 
+import React, { useState } from "react";
 
 const STORAGE_KEY = "ids-runs-simple";
 const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
@@ -13,24 +14,6 @@ const DEFAULT_HP = {
   "LightGBM": { n_estimators: 500, num_leaves: 31, learning_rate: 0.1, max_depth: -1 },
   "CatBoost": { iterations: 500, depth: 6, learning_rate: 0.1, l2_leaf_reg: 3.0 }
 };
-const PRESETS = {
-  Fast: (m) => {
-    const p = { ...DEFAULT_HP[m] };
-    if ("n_estimators" in p) p.n_estimators = Math.max(100, Math.round(p.n_estimators * 0.5));
-    if ("iterations" in p) p.iterations = Math.max(200, Math.round(p.iterations * 0.5));
-    if ("max_iter" in p) p.max_iter = Math.max(150, Math.round(p.max_iter * 0.6));
-    return p;
-  },
-  Balanced: (m) => ({ ...DEFAULT_HP[m] }),
-  "Best quality": (m) => {
-    const p = { ...DEFAULT_HP[m] };
-    if ("n_estimators" in p) p.n_estimators = Math.round(p.n_estimators * 1.5);
-    if ("iterations" in p) p.iterations = Math.round((p.iterations || 500) * 1.5);
-    if ("max_iter" in p) p.max_iter = Math.round((p.max_iter || 300) * 1.5);
-    if ("learning_rate" in p) p.learning_rate = Math.max(0.01, +(p.learning_rate * 0.7).toFixed(3));
-    return p;
-  },
-};
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
 export default function Train() {
@@ -39,7 +22,6 @@ export default function Train() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
   const [sessionRuns, setSessionRuns] = useState([]);
-  const [toast, setToast] = useState("");
 
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
@@ -52,10 +34,6 @@ export default function Train() {
       selectedModels.forEach(m => { next[m] = deepClone(DEFAULT_HP[m]); });
       return next;
     });
-  };
-
-  const applyPreset = (model, preset) => {
-    setParamsByModel((prev) => ({ ...prev, [model]: PRESETS[preset](model) }));
   };
 
   const runNow = () => {
@@ -76,14 +54,7 @@ export default function Train() {
     const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
     setSessionRuns(combos);
-    setToast(`Saved ${combos.length} run(s).`);
   };
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(""), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   return (
     <>
@@ -140,12 +111,6 @@ export default function Train() {
               {selectedModels.map((m) => (
                 <fieldset key={m} className="hp">
                   <legend className="hp">Hyperparameters — {m}</legend>
-                  <div className="toolbar" style={{ marginBottom: 8 }}>
-                    <span className="btn" style="pointer-events:none;">Preset</span>
-                    <button className="btn" onClick={() => applyPreset(m, "Fast")}>Fast</button>
-                    <button className="btn" onClick={() => applyPreset(m, "Balanced")}>Balanced</button>
-                    <button className="btn" onClick={() => applyPreset(m, "Best quality")}>Best quality</button>
-                  </div>
                   <ModelParamsEditor
                     model={m}
                     value={paramsByModel[m]}
@@ -183,26 +148,21 @@ export default function Train() {
           <table className="table">
             <thead>
               <tr>
-                <th>Run</th><th>Dataset</th><th>Model</th>
-                <th className="td-num">Accuracy</th>
-                <th className="td-num">Precision</th>
-                <th className="td-num">Recall</th>
-                <th className="td-num">F1</th>
+                <th>Dataset</th><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th>
               </tr>
             </thead>
             <tbody>
               {sessionRuns.length === 0 ? (
-                <tr><td className="muted" colSpan={7}>No results yet. Click “Run Models”.</td></tr>
+                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Models”.</td></tr>
               ) : (
                 sessionRuns.map(r => (
                   <tr key={r.id}>
-                    <td><span className="btn" style="pointer-events:none;">{r.id.slice(-6)}</span></td>
                     <td>{r.dataset}</td>
                     <td>{r.model}</td>
-                    <td className="td-num">{r.metrics.accuracy}</td>
-                    <td className="td-num">{r.metrics.precision}</td>
-                    <td className="td-num">{r.metrics.recall}</td>
-                    <td className="td-num">{r.metrics.f1}</td>
+                    <td>{r.metrics.accuracy}</td>
+                    <td>{r.metrics.precision}</td>
+                    <td>{r.metrics.recall}</td>
+                    <td>{r.metrics.f1}</td>
                   </tr>
                 ))
               )}
@@ -210,8 +170,6 @@ export default function Train() {
           </table>
         </div>
       </section>
-
-      <div className={`toast ${toast ? "show" : ""}`}>{toast}</div>
     </>
   );
 }

@@ -1,13 +1,13 @@
+// src/App.jsx 
 import React from "react";
 import Home from "./pages/Home.jsx";
 import Train from "./pages/Train.jsx";
 import Results from "./pages/Results.jsx";
 
 function useHashRoute() {
-  const get = () => window.location.hash.slice(1) || "/";
-  const [route, setRoute] = React.useState(get);
+  const [route, setRoute] = React.useState(() => window.location.hash.slice(1) || "/");
   React.useEffect(() => {
-    const onHashChange = () => setRoute(get());
+    const onHashChange = () => setRoute(window.location.hash.slice(1) || "/");
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, []);
@@ -16,14 +16,11 @@ function useHashRoute() {
 
 export default function App() {
   const route = useHashRoute();
-  const path = route || "/";
 
   let page = <div className="card">Not found</div>;
-  if (path === "/") page = <Home />;
-  else if (path.startsWith("/train")) page = <Train />;
-  else if (path.startsWith("/results")) page = <Results />;
-
-  const isActive = (p) => (path.startsWith(p) ? "active" : "");
+  if (route === "/" || route === "") page = <Home />;
+  else if (route.startsWith("/train")) page = <Train />;
+  else if (route.startsWith("/results")) page = <Results />;
 
   return (
     <div>
@@ -31,8 +28,8 @@ export default function App() {
         <div className="container shell-header__inner">
           <a href="#/" className="brand-pill">Welcome to IDS-System</a>
           <nav className="toolbar">
-            <a className={`btn link-nav ${isActive("/train")}`} href="#/train" aria-current={isActive("/train") ? "page" : undefined}>Train</a>
-            <a className={`btn link-nav ${isActive("/results")}`} href="#/results" aria-current={isActive("/results") ? "page" : undefined}>Results</a>
+            <a className="btn" href="#/train">Train</a>
+            <a className="btn" href="#/results">Results</a>
           </nav>
         </div>
       </header>

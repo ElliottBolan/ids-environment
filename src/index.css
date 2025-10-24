@@ -1,3 +1,4 @@
+/* src/index.css */
 :root {
   --bg: #f6f7f9;
   --text: #111;
@@ -5,7 +6,6 @@
   --border: #e5e7eb;
   --border-strong: #d1d5db;
   --card: #fff;
-  --accent: #E8F7E0;
 }
 
 html, body, #root { height: 100%; }
@@ -44,7 +44,7 @@ a { color: inherit; text-decoration: none; }
   width: 48px;
   margin-top: 6px;
   border-radius: 999px;
-  background: linear-gradient(90deg, var(--accent), rgba(232,247,224,0));
+  background: linear-gradient(90deg, #E8F7E0, rgba(232,247,224,0));
 }
 .section__hint { color: var(--muted); font-size: 12px; }
 
@@ -52,14 +52,6 @@ a { color: inherit; text-decoration: none; }
 .checkbox-row { display: flex; gap: 8px; align-items: center; }
 .toolbar { display: flex; gap: 12px; align-items: center; }
 .muted { color: var(--muted); }
-
-/* IDS-highlighted section */
-.section--ids {
-  background: var(--accent);
-  border: 1px solid #cde9be;
-  border-radius: 14px;
-  padding: 16px;
-}
 
 /* Buttons – all user-hit buttons are grey */
 .btn {
@@ -75,27 +67,6 @@ a { color: inherit; text-decoration: none; }
 .btn:hover { background: #d1d5db; box-shadow: 0 4px 10px rgba(0,0,0,.06); transform: translateY(-1px); }
 .btn:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(0,0,0,.05); }
 .btn[disabled] { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
-.btn.active { outline: 2px solid #cfd2d6; }
-
-.link-nav { padding: 8px 10px; border-radius: 12px; }
-
-/* Focus visibility */
-:focus-visible {
-  outline: 3px solid #94a3b8;
-  outline-offset: 2px;
-  border-radius: 10px;
-}
-
-/* Brand */
-.brand-pill {
-  background: var(--accent);
-  color: var(--text);
-  padding: 6px 10px;
-  border-radius: 12px;
-  border: 1px solid #cde9be;
-  font-weight: 800;
-  display: inline-block;
-}
 
 /* Forms */
 .form-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
@@ -117,5 +88,32 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; }
 .table td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
-.table tr:hover td { background: #fafafa; }
-.td-num { text-align: right; }
+
+/* Fun accents */
+.brand-pill {
+  background: #E8F7E0;
+  color: var(--text);
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid #cde9be;
+  font-weight: 800;
+  display: inline-block;
+  box-shadow: 0 2px 0 #cde9be;
+  animation: pillGlow 3s ease-in-out infinite;
+}
+@keyframes pillGlow {
+  0%,100% { box-shadow: 0 2px 0 #cde9be; }
+  50% { box-shadow: 0 6px 14px rgba(205,233,190,.6); }
+}
+
+/* IDS-highlighted section */
+.section--ids {
+  background: #E8F7E0;
+  border: 1px solid #cde9be;
+  border-radius: 14px;
+  padding: 16px;
+}
+.card--accent {
+  background: var(--accent);
+  border: 1px solid #cde9be;
+}
