@@ -6,7 +6,7 @@ export default function Home() {
     <section className="hero">
       <div className="hero__inner">
         <h1 className="hero-title">Get started</h1>
-        <p className="hero-subtitle">Pick a path to begin</p>
+  
         <div className="hero-grid">
           <div className="card card--action card--accent">
             <h3 className="section__title" style={{ fontSize: 18 }}>Train Models</h3>

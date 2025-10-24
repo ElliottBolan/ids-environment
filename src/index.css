@@ -113,7 +113,20 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
   border-radius: 14px;
   padding: 16px;
 }
+:root {
+  --accent-border-strong: #7CB969;
+}
+
 .card--accent {
-  background: var(--accent);
-  border: 1px solid #cde9be;
+  border: 2px solid var(--accent-border-strong);
+}
+
+.hero { border: none !important; }
+
+.hero-grid {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  align-items: stretch;
+  flex-wrap: wrap;
 }
