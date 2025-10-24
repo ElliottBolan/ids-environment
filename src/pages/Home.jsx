@@ -1,22 +1,28 @@
 import React from "react";
 
 export default function Home() {
-  const grid = { display:"grid", gap:16, gridTemplateColumns:"repeat(auto-fit, minmax(260px, 1fr))" };
-  const h1 = { margin:0, fontSize:20 };
-  const p = { margin:"8px 0 16px", color:"#6b7280" };
-
   return (
-    <div style={grid}>
-      <div className="card">
-        <h1 style={h1}>Train Models</h1>
-        <p style={p}>Pick datasets & models, then launch runs.</p>
-        <a className="btn primary" href="#/train">Go to Train</a>
+    <section className="section section--ids">
+      <div className="section__head">
+        <h2 className="section__title">Get started</h2>
+        <div className="section__hint">Choose a workflow</div>
       </div>
-      <div className="card">
-        <h1 style={h1}>View Results</h1>
-        <p style={p}>Browse & download past runs.</p>
-        <a className="btn primary" href="#/results">Go to Results</a>
+      <div className="grid">
+        <div className="card">
+          <h3 className="section__title" style={{ fontSize: 18 }}>Train Models</h3>
+          <p className="muted" style={{ margin: "6px 0 14px" }}>
+            Select datasets and algorithms, then launch multiple runs.
+          </p>
+          <a className="btn" href="#/train">Train</a>
+        </div>
+        <div className="card">
+          <h3 className="section__title" style={{ fontSize: 18 }}>View Results</h3>
+          <p className="muted" style={{ margin: "6px 0 14px" }}>
+            Browse, compare, and download past runs.
+          </p>
+          <a className="btn" href="#/results">Results</a>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
