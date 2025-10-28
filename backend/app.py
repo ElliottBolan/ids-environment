@@ -78,14 +78,17 @@ def train_model():
         "dataset": dataset,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
     }
+
+    # Here, we'll have to insert these results into our DB following our schema
+
     return jsonify(results)
 
-# Get a list of previous experiments (again, will have to modify to account for a MySQL DB)
+# Get a list of previous experiments (again, will have to modify to account for a MySQL DB by querying all 'experiment' rows)
 @app.route("/api/experiments", methods=["GET"])
 def get_experiments():
     return jsonify({"experiments": MOCK_EXPERIMENTS})
 
-# Get details for one experiment by ID (Integrate with MySQL DB once that's up)
+# Get details for one experiment by ID (Integrate with MySQL DB once that's up through a query by ID)
 @app.route("/api/experiments/<int:exp_id>", methods=["GET"])
 def get_experiment(exp_id):
     exp = next((e for e in MOCK_EXPERIMENTS if e["id"] == exp_id), None)
