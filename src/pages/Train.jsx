@@ -3,15 +3,11 @@ import React, { useState } from "react";
 
 const STORAGE_KEY = "ids-runs-simple";
 const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-const MODELS = ["XGBoost", "Random Forest", "SVM", "Logistic Regression", "MLP", "LightGBM", "CatBoost"];
+const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 const DEFAULT_HP = {
-  "XGBoost": { n_estimators: 400, max_depth: 6, learning_rate: 0.1, subsample: 0.8, colsample_bytree: 0.8, reg_lambda: 1.0 },
-  "Random Forest": { n_estimators: 300, max_depth: 20, max_features: "sqrt", min_samples_split: 2 },
-  "SVM": { C: 1.0, kernel: "rbf", gamma: "scale" },
-  "Logistic Regression": { penalty: "l2", C: 1.0, max_iter: 500, solver: "lbfgs" },
-  "MLP": { hidden_layer_sizes: "128,64", activation: "relu", alpha: 0.0001, learning_rate_init: 0.001, max_iter: 300 },
   "LightGBM": { n_estimators: 500, num_leaves: 31, learning_rate: 0.1, max_depth: -1 },
+  "XGBoost": { n_estimators: 400, max_depth: 6, learning_rate: 0.1, subsample: 0.8, colsample_bytree: 0.8, reg_lambda: 1.0 },
   "CatBoost": { iterations: 500, depth: 6, learning_rate: 0.1, l2_leaf_reg: 3.0 }
 };
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
