@@ -1,4 +1,10 @@
-/* src/index.css */
+/* src/index.css
+   Global styles for the demo frontend
+   - Color variables and base typography
+   - Layout primitives (container, header)
+   - Reusable UI components (cards, buttons, forms, tables)
+   - Small accents for a friendlier feel
+*/
 :root {
   --bg: #f6f7f9;
   --text: #111;
