@@ -327,6 +327,70 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
   white-space: nowrap;  /* prevent unintended wrapping */
 }
 
+/* Upgraded Home hero styling */
+.page-center {
+  /* Center hero within viewport, accounting for sticky header */
+  min-height: calc(100vh - var(--header-h) - 24px);
+  display: grid;
+  place-items: center;
+  padding: 12px 0;
+}
+.hero {
+  background: linear-gradient(180deg, #eef6ea, #e9f2e6);
+  border: 1px solid #dbe7d6;
+  border-radius: 18px;
+  padding: 28px 18px 34px;
+  box-shadow: 0 10px 22px rgba(0,0,0,.06);
+  width: 100%;              /* fill container like LCCDE display */
+  max-width: 960px;         /* align with Results frame width */
+  min-height: 420px;        /* approximate LCCDE display height */
+  margin: 0 auto 24px;      /* center horizontally inside the container */
+}
+.hero__inner { text-align: center; }
+.hero-title {
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  margin: 0 0 8px 0;
+  position: relative;
+}
+.hero-title::after {
+  content: "";
+  display: block;
+  height: 5px;
+  width: 64px;
+  margin: 8px auto 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c9e7bb, rgba(201,231,187,0));
+}
+.hero-subtitle { color: var(--muted); margin: 4px 0 18px; }
+
+.card--action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  text-align: center;
+  gap: 8px;
+  width: 420px;         /* wider card width to better fill hero */
+  height: 200px;        /* equal card height */
+  box-sizing: border-box;
+  border-width: 2px;
+  box-shadow: 0 8px 18px rgba(0,0,0,.05);
+}
+.card--action:hover { transform: translateY(-2px); box-shadow: 0 12px 24px rgba(0,0,0,.08); }
+.card__desc { margin: 6px 0 16px !important; }
+
+.btn-lg { padding: 12px 18px; font-weight: 800; }
+
+@media (max-width: 640px) {
+  .page-center { min-height: auto; padding: 12px 0; }
+  .hero { padding: 22px 14px 28px; min-height: unset; }
+  .hero-title { font-size: 28px; }
+  .hero-grid { gap: 16px; }
+  .card--action { width: 100%; height: auto; }
+}
+
 /* Wireframe styling to approximate the provided mock */
 .wf-shell {
   background: #e9f2e6;
