@@ -1,4 +1,10 @@
 // src/pages/Home.jsx 
+/*
+  Landing page with two primary actions:
+  - Train: navigate to the training workflow (dataset/model + run)
+  - Results: browse, filter, and export previously saved runs
+  This page is intentionally minimal; it just routes the user.
+*/
 import React from "react";
 
 export default function Home() {
@@ -8,6 +14,7 @@ export default function Home() {
         <h1 className="hero-title">Get started</h1>
   
         <div className="hero-grid">
+          {/* Card linking to the training page */}
           <div className="card card--action card--accent">
             <h3 className="section__title" style={{ fontSize: 18 }}>Train Models</h3>
             <p className="muted" style={{ margin: "6px 0 14px" }}>
@@ -15,6 +22,7 @@ export default function Home() {
             </p>
             <a className="btn btn-lg" href="#/train">Train</a>
           </div>
+          {/* Card linking to the results page */}
           <div className="card card--action card--accent">
             <h3 className="section__title" style={{ fontSize: 18 }}>View Results</h3>
             <p className="muted" style={{ margin: "6px 0 14px" }}>

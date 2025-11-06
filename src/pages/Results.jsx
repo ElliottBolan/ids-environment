@@ -1,10 +1,12 @@
 // src/pages/Results.jsx 
+// Results browser backed by localStorage: list, select, export CSV, delete all.
 import React, { useMemo, useState } from "react";
 const STORAGE_KEY = "ids-runs-simple";
 
 export default function Results() {
   const [runs, setRuns] = useState(() => readRuns());
-  const [selected, setSelected] = useState({}); // {id: true}
+  // Selected rows map: { [id]: true }
+  const [selected, setSelected] = useState({});
   const selectedRows = useMemo(() => runs.filter(r => selected[r.id]), [runs, selected]);
 
   const refresh = () => setRuns(readRuns());
@@ -17,6 +19,7 @@ export default function Results() {
   const toggle = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
 
   const downloadCSV = () => {
+    // Export selected rows, or everything if none selected
     const rows = selectedRows.length ? selectedRows : runs;
     const headers = ["id","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
     const mapped = rows.map(r => ({
@@ -118,10 +121,12 @@ function readRuns() {
   catch { return []; }
 }
 function toCSV(rows, headers) {
+  // Minimal CSV with escaping for quotes/newlines/commas
   const esc = (v) => {
     if (v == null) return "";
     const s = String(v);
-    if (/[,\"\n]/.test(s)) return '"' + s.replace(/\"/g, '""') + '"';
+    // eslint-disable-next-line no-useless-escape
+    if (/[,"\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
     return s;
   };
   const head = headers.map(esc).join(",");
@@ -129,6 +134,7 @@ function toCSV(rows, headers) {
   return head + "\n" + body;
 }
 function downloadText(filename, text, type = "text/plain") {
+  // Blob + temporary link to trigger a download
   const blob = new Blob([text], { type });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
