@@ -9,9 +9,6 @@ export default function Results() {
   // Selected rows map: { [id]: true } (legacy table)
   const [selected, setSelected] = useState({});
   const selectedRows = useMemo(() => runs.filter(r => selected[r.id]), [runs, selected]);
-  // Session comparison selections (limit to two sessions)
-  const [selectedSessions, setSelectedSessions] = useState([]);
-  const [compareSessions, setCompareSessions] = useState([]);
   // Wireframe: simple tab state to preview the latest run per model
   const MODELS = ["LightGBM","XGBoost","CatBoost"];
   const [activeModel, setActiveModel] = useState(MODELS[1]);
@@ -83,7 +80,7 @@ export default function Results() {
       {/* Wireframe-style header and model display */}
       <section className="wf-shell">
         <div className="wf-topbar">
-          <a className="wf-back" href="#/train">Go back</a>
+          <a className="wf-back" href="#/train">← Go back</a>
           <h1 className="wf-title">LCCDE Model Display</h1>
         </div>
 
@@ -102,7 +99,7 @@ export default function Results() {
             {/* Placeholder image area; swap to real confusion matrix when available */}
             <div className="wf-heatmap__placeholder">Confusion Matrix</div>
             <div className="wf-times muted">
-              Cpu time(total): 18.1 s - Wall time: 11.7 s
+              Cpu time(total): 18.1 s · Wall time: 11.7 s
             </div>
           </div>
 
@@ -113,121 +110,12 @@ export default function Results() {
             <div><span className="wf-metric__label">F1 :</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.f1)}</span></div>
           </div>
 
-          
+          <div className="wf-actions">
+            <button className="wf-oval" onClick={selectBestByAccuracy}>Compare Models</button>
+            <button className="wf-oval" onClick={() => downloadCSV()}>Download CSV</button>
+          </div>
         </div>
       </section>
-
-      {/* Session History: show all sessions in reverse order (latest first) */}
-      {(() => {
-        const withSession = runs.filter(r => Number.isFinite(r.session));
-        if (!withSession.length) return null;
-        const sessionsDesc = Array.from(new Set(withSession.map(r => r.session))).sort((a,b) => b - a);
-        const runsForSession = (s) => withSession.filter(r => r.session === s).slice().sort((a,b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
-        const summaryForSession = (s) => summarizeSession(runsForSession(s));
-
-        return (
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">Session Results</h2>
-              <div className="section__hint">{withSession.length} total runs • {sessionsDesc.length} sessions</div>
-            </div>
-
-            <div className="card toolbar" style={{ marginBottom: 12 }}>
-              <div className="muted">Pick exactly 2 sessions to compare</div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <div style={{ fontWeight: 600 }}>Selected: {selectedSessions.length ? selectedSessions.map(s => `#${s}`).join(", ") : "none"}</div>
-                <button className="btn" disabled={selectedSessions.length !== 2} onClick={runSessionCompare}>Compare</button>
-                <button className="btn" disabled={!selectedSessions.length} onClick={() => setSelectedSessions([])}>Clear picks</button>
-              </div>
-            </div>
-
-            {compareSessions.length === 2 && (
-              <section className="section" style={{ marginBottom: 12 }}>
-                <div className="section__head">
-                  <h3 className="section__title">Session Comparison</h3>
-                  <div className="section__hint">Comparing #{compareSessions[0]} vs #{compareSessions[1]}</div>
-                </div>
-                <div className="grid" style={{ gap: 12 }}>
-                  {compareSessions.map(s => {
-                    const sruns = runsForSession(s);
-                    const summary = summaryForSession(s);
-                    return (
-                      <div key={s} className="card" style={{ padding: 12, display: "grid", gap: 8 }}>
-                        <div className="section__head">
-                          <h4 className="section__title">Session #{s}</h4>
-                          <div className="section__hint">{sruns.length} runs • {summary.datasetCount} datasets • {summary.modelCount} models</div>
-                        </div>
-                        <div className="grid" style={{ gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                          <div><span className="label">Avg accuracy</span><div>{fmt(summary.avgAccuracy)}</div></div>
-                          <div><span className="label">Best accuracy</span><div>{fmt(summary.bestAccuracy)}</div></div>
-                          <div><span className="label">Avg F1</span><div>{fmt(summary.avgF1)}</div></div>
-                          <div><span className="label">Best F1</span><div>{fmt(summary.bestF1)}</div></div>
-                        </div>
-                        <div className="grid grid-runs">
-                          {sruns.map(r => {
-                            const dur = typeof r.durationMs === "number" ? r.durationMs : (r.finishedAt && r.startedAt ? (r.finishedAt - r.startedAt) : null);
-                            const secs = dur != null ? (dur / 1000).toFixed(1) + " s" : "-";
-                            return (
-                              <div key={r.id} className="card run-card">
-                                <div style={{ fontWeight: 700, marginBottom: 6 }}>{r.dataset} - {r.model}</div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                                  <div><span className="label">Accuracy</span><div>{r.metrics?.accuracy}</div></div>
-                                  <div><span className="label">Precision</span><div>{r.metrics?.precision}</div></div>
-                                  <div><span className="label">Recall</span><div>{r.metrics?.recall}</div></div>
-                                  <div><span className="label">F1</span><div>{r.metrics?.f1}</div></div>
-                                </div>
-                                <div className="muted" style={{ marginTop: 8 }}>Time: {secs} • Finished: {new Date(r.finishedAt).toLocaleTimeString()}</div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {sessionsDesc.map(s => {
-              const sruns = runsForSession(s);
-              return (
-                <div key={s} className="section" style={{ marginBottom: 12 }}>
-                  <div className="section__head">
-                    <h3 className="section__title">Session #{s}</h3>
-                    <div className="section__hint">{sruns.length} completed</div>
-                    <label className="checkbox-row" style={{ marginLeft: "auto" }}>
-                      <input
-                        type="checkbox"
-                        checked={selectedSessions.includes(s)}
-                        onChange={() => toggleSessionPick(s)}
-                      />
-                      <span>Select</span>
-                    </label>
-                  </div>
-                  <div className="grid grid-runs">
-                    {sruns.map(r => {
-                      const dur = typeof r.durationMs === "number" ? r.durationMs : (r.finishedAt && r.startedAt ? (r.finishedAt - r.startedAt) : null);
-                      const secs = dur != null ? (dur / 1000).toFixed(1) + " s" : "-";
-                      return (
-                        <div key={r.id} className="card run-card">
-                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{r.dataset} - {r.model}</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                            <div><span className="label">Accuracy</span><div>{r.metrics?.accuracy}</div></div>
-                            <div><span className="label">Precision</span><div>{r.metrics?.precision}</div></div>
-                            <div><span className="label">Recall</span><div>{r.metrics?.recall}</div></div>
-                            <div><span className="label">F1</span><div>{r.metrics?.f1}</div></div>
-                          </div>
-                          <div className="muted" style={{ marginTop: 8 }}>Time: {secs} • Finished: {new Date(r.finishedAt).toLocaleTimeString()}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        );
-      })()}
 
       {SHOW_LEGACY && (
         <>
@@ -253,7 +141,7 @@ export default function Results() {
                 {selectedRows.map(r => (
                   <div key={r.id} className="card" style={{ padding: 12 }}>
                     <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                      {r.dataset} - {r.model} <span className="muted">({new Date(r.finishedAt).toLocaleString()})</span>
+                      {r.dataset} — {r.model} <span className="muted">({new Date(r.finishedAt).toLocaleString()})</span>
                     </div>
                     <pre className="textarea" style={{ margin: 0 }}>
 {JSON.stringify(r.hyperparams ?? {}, null, 2)}
@@ -263,7 +151,7 @@ export default function Results() {
               </div>
             </section>
           )}
-
+          
           <section className="section">
             <div className="section__head">
               <h2 className="section__title">All Runs</h2>
@@ -312,27 +200,8 @@ export default function Results() {
 
 // Format metric (0..1) to percentage with one decimal; dash if missing
 function fmt(v) {
-  if (typeof v !== "number" || Number.isNaN(v)) return "-";
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
   return `${(v * 100).toFixed(1)}%`;
-}
-
-// Session summary metrics to power side-by-side compare
-function summarizeSession(runs) {
-  const numbers = (fn) => runs.map(fn).filter(v => typeof v === "number" && !Number.isNaN(v));
-  const acc = numbers(r => r?.metrics?.accuracy);
-  const f1 = numbers(r => r?.metrics?.f1);
-  const avg = (arr) => arr.length ? arr.reduce((a,b) => a + b, 0) / arr.length : undefined;
-  const best = (arr) => arr.length ? Math.max(...arr) : undefined;
-  const datasets = new Set(runs.map(r => r.dataset));
-  const models = new Set(runs.map(r => r.model));
-  return {
-    datasetCount: datasets.size,
-    modelCount: models.size,
-    avgAccuracy: avg(acc),
-    bestAccuracy: best(acc),
-    avgF1: avg(f1),
-    bestF1: best(f1),
-  };
 }
 
 function readRuns() {
