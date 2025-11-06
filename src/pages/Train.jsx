@@ -2,6 +2,7 @@
 // Training UI (front-end only): pick datasets, tweak params, save mock runs.
 // Data persists in localStorage under `ids-runs-simple` and is shown in Results.
 import React, { useState } from "react";
+import {useForm} from "react-hook-form";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
@@ -21,8 +22,10 @@ const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 export default function Train() {
   // Selected datasets for the run matrix
   const [selectedDatasets, setSelectedDatasets] = useState([]);
-  // Models are fixed to all MODELS (kept in state for future flexibility)
-  const [selectedModels, setSelectedModels] = useState(MODELS);
+  
+  // select all button for datasets
+  //const [allDatasets, setAllDatasets] = dataList.map(item => item.id)
+
   // Hyperparameter editor is always visible
   // Hyperparameters by model name
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
@@ -33,10 +36,17 @@ export default function Train() {
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
 
-  // Enable Run only when at least one dataset is chosen
+  // Enable Run only when at least one dataset is chosen 
   const canRun = selectedDatasets.length > 0;
 
-  // Model selection UI removed; models are fixed.
+  //const selectAllDs = (allDatasets, setArr) => {
+    //const isAllSelected = selectedIds.length === allItemIds.length && allItemIds.length > 0;
+    //setArr(allDatasets);
+  //}
+
+  //const deselectAll = (setSelectedArr) => {
+    //setSelectedArr([]); // Clear the selected array
+  //};
 
   /** Reset all model hyperparameters to defaults. */
   const resetSelectedParams = () => {
@@ -77,13 +87,14 @@ export default function Train() {
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Choose Datasets</h2>
+          <h2 className="section__title">Select Datasets</h2>
           <div className="section__hint">{selectedDatasets.length} selected</div>
         </div>
         <div className="card grid">
           {/* Dataset checkboxes drive the run matrix */}
           {DATASETS.map(ds => (
             <label key={ds} className="checkbox-row">
+              {/*<input type="checkbox" checked={allDatasets.includes(ds)} onChange={() => toggle(allDatasets,selectedDatasets, ds)}></input>*/}
               <input
                 type="checkbox"
                 checked={selectedDatasets.includes(ds)}
@@ -103,12 +114,11 @@ export default function Train() {
           </div>
         </div>
         <div className="card">
-          <div className="section__hint">Using all models:</div>
+          <div className="section__hint">Within the LCCDDE:</div>
           <div className="grid" style={{ marginTop: 8 }}>
             {/* Read-only list of models (could be toggles later) */}
             {MODELS.map(m => (
               <div key={m} className="checkbox-row" aria-label={`Model ${m}`}>
-                <input type="checkbox" checked readOnly aria-hidden="true" />
                 <span>{m}</span>
               </div>
             ))}
@@ -122,7 +132,7 @@ export default function Train() {
           <div style={{ display: "grid", gap: 12 }}>
             {MODELS.map((m) => (
               <fieldset key={m} className="hp">
-                <legend className="hp">Hyperparameters — {m}</legend>
+                <legend className="hp">{m}</legend>
                 <ModelParamsEditor
                   model={m}
                   value={paramsByModel[m]}
@@ -140,7 +150,7 @@ export default function Train() {
           <div className="section__hint">Launch experiments</div>
         </div>
         <div className="card toolbar">
-          <button className="btn" disabled={!canRun} onClick={runNow}>Run Models</button>
+          <button className="btn" disabled={!canRun} onClick={runNow}>Run Model</button>
           <span className="muted">
             {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
           </span>
@@ -164,7 +174,7 @@ export default function Train() {
             </thead>
             <tbody>
               {sessionRuns.length === 0 ? (
-                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Models”.</td></tr>
+                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Model”.</td></tr>
               ) : (
                 sessionRuns.map(r => (
                   <tr key={r.id}>
@@ -187,84 +197,49 @@ export default function Train() {
 
 // Editor for a model's hyperparameters (controlled inputs)
 function ModelParamsEditor({ model, value, onChange }) {
+
+  const {register, handleSubmit, formState: {errors} } = useForm();
+
+  const onSubmit = (data) => {
+    console.log(data);
+  };
+
   // Common input bindings: numeric vs text. Empty string permits editing.
   const set = (k, v) => onChange({ ...value, [k]: v });
   const num = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value === "" ? "" : Number(e.target.value)) });
-  const txt = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value) });
 
+  //inputing hyper params with form validation
   switch (model) {
     case "XGBoost":
       return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" min="1" step="1" {...num("max_depth")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="subsample"><input className="input" type="number" min="0.1" max="1" step="0.1" {...num("subsample")} /></Field>
-          <Field label="colsample_bytree"><input className="input" type="number" min="0.1" max="1" step="0.1" {...num("colsample_bytree")} /></Field>
-          <Field label="reg_lambda"><input className="input" type="number" min="0" step="0.1" {...num("reg_lambda")} /></Field>
-        </div>
-      );
-    case "Random Forest":
-      return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" min="1" step="1" {...num("max_depth")} /></Field>
-          <Field label="max_features">
-            <select className="select" {...txt("max_features")}>
-              <option value="sqrt">sqrt</option><option value="log2">log2</option><option value="auto">auto</option>
-            </select>
-          </Field>
-          <Field label="min_samples_split"><input className="input" type="number" min="2" step="1" {...num("min_samples_split")} /></Field>
-        </div>
-      );
-    case "SVM":
-      return (
-        <div className="form-grid">
-          <Field label="C"><input className="input" type="number" min="0.01" step="0.01" {...num("C")} /></Field>
-          <Field label="kernel">
-            <select className="select" {...txt("kernel")}><option value="rbf">rbf</option><option value="linear">linear</option></select>
-          </Field>
-          <Field label="gamma">
-            <select className="select" {...txt("gamma")}><option value="scale">scale</option><option value="auto">auto</option></select>
-          </Field>
-        </div>
-      );
-    case "Logistic Regression":
-      return (
-        <div className="form-grid">
-          <Field label="penalty"><select className="select" {...txt("penalty")}><option value="l2">l2</option></select></Field>
-          <Field label="C"><input className="input" type="number" min="0.01" step="0.01" {...num("C")} /></Field>
-          <Field label="max_iter"><input className="input" type="number" min="100" step="50" {...num("max_iter")} /></Field>
-          <Field label="solver"><select className="select" {...txt("solver")}><option value="lbfgs">lbfgs</option><option value="saga">saga</option></select></Field>
-        </div>
-      );
-    case "MLP":
-      return (
-        <div className="form-grid">
-          <Field label="hidden_layer_sizes (e.g., 128,64)"><input className="input" type="text" {...txt("hidden_layer_sizes")} /></Field>
-          <Field label="activation"><select className="select" {...txt("activation")}><option value="relu">relu</option><option value="tanh">tanh</option></select></Field>
-          <Field label="alpha"><input className="input" type="number" min="0" step="0.0001" {...num("alpha")} /></Field>
-          <Field label="learning_rate_init"><input className="input" type="number" min="0" step="0.0001" {...num("learning_rate_init")} /></Field>
-          <Field label="max_iter"><input className="input" type="number" min="100" step="50" {...num("max_iter")} /></Field>
-        </div>
+        <form onSubmit={handleSubmit(onSubmit)}>
+          <div className="form-grid">
+            <Field label="n_estimators"><input className="input" type="number" 
+              {...register("estim", { required: "Please enter a value", min:{ value: 1, message:'Please enter a hyperparameter value'}})} />
+            </Field>
+            <Field label="learning_rate"><input className="input" required type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
+            {errors.estim && (<span className= "error-message">{errors.estim.message}</span>)}
+          </div>
+        </form>
       );
     case "LightGBM":
       return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="num_leaves"><input className="input" type="number" min="2" step="1" {...num("num_leaves")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" step="1" {...num("max_depth")} /></Field>
-        </div>
+        <form>
+          <div className="form-grid">
+            <Field label="Number of Estimators"><input className="input" required type="number" 
+            {...register("estim", { required: "Please enter a value", min:{ value: 1, message:'Please enter a hyperparameter value'}})} /></Field>
+            <Field label="Learning Rate"><input className="input"required type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
+          </div>
+        </form>
       );
     case "CatBoost":
       return (
-        <div className="form-grid">
-          <Field label="iterations"><input className="input" type="number" min="10" step="10" {...num("iterations")} /></Field>
-          <Field label="depth"><input className="input" type="number" min="1" step="1" {...num("depth")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="l2_leaf_reg"><input className="input" type="number" min="0" step="0.1" {...num("l2_leaf_reg")} /></Field>
-        </div>
+        <form>
+          <div className="form-grid">
+            <Field label="Number of Iterations"><input className="input"  type="number" min="10" step="10" {...num("iterations")} /></Field>
+            <Field label="Learning Rate"><input className="input"  type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
+          </div>
+        </form>
       );
     default:
       return <div className="form-grid"><div>No editor for model: {model}</div></div>;
