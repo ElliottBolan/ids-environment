@@ -1,15 +1,32 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from flask_sqlalchemy import SQLAlchemy
+from dotenv import load_dotenv
+import os
 import time
+from models import db, ModelRun
+
+# --- Load environment variables ---
+load_dotenv()
 
 app = Flask(__name__)
-# Allow requests from the React dev server (and others) during development
 CORS(app)
+
+# --- Configure Database ---
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_NAME = os.getenv("DB_NAME", "idsml")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = f"mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}"
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db.init_app(app) # Initialize db with the Flask app
 
 # TEST API
 @app.route("/api/hello") # Use the '/api/...' prefix for all backend routes to make it clear they're API endpoints
 def hello_world():
-    return jsonify(message="Hello, World!") #Return JSON instead of HTML. It's easier for React to consume
+    return jsonify(message="Backend connected successfully!") #Return JSON instead of HTML. It's easier for React to consume
 
 # --- MOCK DATA ---
 AVAILABLE_MODELS = ["LCCDE"]
@@ -88,6 +105,43 @@ def train_model():
 def get_experiments():
     return jsonify({"experiments": MOCK_EXPERIMENTS})
 
+@app.route("/api/experiments", methods=["POST"])
+def add_experiment():
+    try:
+        data = request.get_json()
+
+        # Extract and validate input
+        model_name = data.get("model_name")
+        params = data.get("params")
+        results = data.get("results")
+        duration_s = data.get("duration_s")
+
+        # Basic input validation
+        if not all([model_name, params, results]):
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Create a new instance of ModelRun
+        new_run = ModelRun(
+            model_name=model_name,
+            params=params,
+            results=results,
+            duration_s=duration_s
+        )
+
+        # Add to database
+        db.session.add(new_run)
+        db.session.commit()
+
+        return jsonify({
+            "message": "Experiment inserted successfully!",
+            "experiment_id": new_run.id
+        }), 201
+
+    except Exception as e:
+        db.session.rollback()
+        print("Error inserting experiment:", e)
+        return jsonify({"error": "Failed to insert experiment"}), 500
+
 # Get details for one experiment by ID (Integrate with MySQL DB once that's up through a query by ID)
 @app.route("/api/experiments/<int:exp_id>", methods=["GET"])
 def get_experiment(exp_id):
@@ -97,4 +151,6 @@ def get_experiment(exp_id):
     return jsonify(exp)
 
 if __name__ == "__main__":
+    with app.app_context():
+        db.create_all()
     app.run(port=5000, debug=True) # Port 5000 serves our APIs
