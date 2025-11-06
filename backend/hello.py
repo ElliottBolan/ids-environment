@@ -1,7 +1,8 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+import json
 
-from LCCDE import train_lccde_pipeline
+from backend.LCCDE import train_lccde_pipeline
 
 app = Flask(__name__)
 # Allow requests from the React dev server (and others) during development
@@ -60,7 +61,13 @@ def train_lccde():
         )
 
         # Return the performance metrics
-        return jsonify(make_json_safe(results))
+        json_str = json.dumps(make_json_safe(results), indent=2)
+
+        return app.response_class(
+            response=json_str,
+            status=200,
+            mimetype="application/json"
+        )
 
     except Exception as e:
         import traceback
