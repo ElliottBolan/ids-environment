@@ -99,27 +99,17 @@ export default function App() {
 
   return (
     <div>
-      {showHeader && (
-        <header className="shell-header">
-          <div className="container shell-header__inner">
-            {/* Brand links home */}
-            <a href="#/home" className="brand-pill">
-              IDS Trainer
-            </a>
-            <nav className="toolbar">
-              <a className="btn" href="#/train">
-                Train
-              </a>
-              <a className="btn" href="#/results">
-                Results
-              </a>
-              <button className="btn" onClick={downloadAllCSV}>
-                Download CSV
-              </button>
-            </nav>
-          </div>
-        </header>
-      )}
+      <header className="shell-header">
+        <div className="container shell-header__inner">
+          {/* Brand links home */}
+          <a href="#/" className="brand-pill">Welcome to IDS-System</a>
+          <nav className="toolbar">
+            {/* Hash links; no router lib */}
+            <a className="btn" href="#/train">Train</a>
+            <a className="btn" href="#/results">Results</a>
+          </nav>
+        </div>
+      </header>
 
       <main className="container" style={{ paddingTop: 16, paddingBottom: 24 }}>
         {page}
