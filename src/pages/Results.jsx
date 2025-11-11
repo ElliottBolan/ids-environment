@@ -1,6 +1,6 @@
 // src/pages/Results.jsx 
 // Results browser backed by localStorage: list, select, export CSV, delete all.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 const STORAGE_KEY = "ids-runs-simple";
 
 export default function Results() {
@@ -40,9 +40,10 @@ export default function Results() {
   const downloadCSV = () => {
     // Export selected rows, or everything if none selected
     const rows = selectedRows.length ? selectedRows : runs;
-    const headers = ["id","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
+    const headers = ["id","session","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
     const mapped = rows.map(r => ({
       id: r.id,
+      session: r.session,
       dataset: r.dataset,
       model: r.model,
       accuracy: r.metrics?.accuracy,
@@ -55,6 +56,12 @@ export default function Results() {
     const csv = toCSV(mapped, headers);
     downloadText("ids_runs.csv", csv, "text/csv");
   };
+
+  // On first load, if runs exist, auto-select the model with best accuracy
+  useEffect(() => {
+    if (runs && runs.length) selectBestByAccuracy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <>
@@ -91,12 +98,53 @@ export default function Results() {
             <div><span className="wf-metric__label">F1 :</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.f1)}</span></div>
           </div>
 
-          <div className="wf-actions">
-            <button className="wf-oval" onClick={selectBestByAccuracy}>Compare Models</button>
-            <button className="wf-oval" onClick={() => downloadCSV()}>Download CSV</button>
-          </div>
+          {/* Compare Models button removed as requested */}
         </div>
       </section>
+
+      {/* Session History: show all sessions in reverse order (latest first) */}
+      {(() => {
+        const withSession = runs.filter(r => Number.isFinite(r.session));
+        if (!withSession.length) return null;
+        const sessionsDesc = Array.from(new Set(withSession.map(r => r.session))).sort((a,b) => b - a);
+        return (
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">Session Results</h2>
+              <div className="section__hint">{withSession.length} total runs · {sessionsDesc.length} sessions</div>
+            </div>
+            {sessionsDesc.map(s => {
+              const sruns = withSession.filter(r => r.session === s).slice().sort((a,b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
+              return (
+                <div key={s} className="section" style={{ marginBottom: 12 }}>
+                  <div className="section__head">
+                    <h3 className="section__title">Session #{s}</h3>
+                    <div className="section__hint">{sruns.length} completed</div>
+                  </div>
+                  <div className="grid grid-runs">
+                    {sruns.map(r => {
+                      const dur = typeof r.durationMs === 'number' ? r.durationMs : (r.finishedAt && r.startedAt ? (r.finishedAt - r.startedAt) : null);
+                      const secs = dur != null ? (dur / 1000).toFixed(1) + ' s' : '—';
+                      return (
+                        <div key={r.id} className="card run-card">
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{r.dataset} — {r.model}</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div><span className="label">Accuracy</span><div>{r.metrics?.accuracy}</div></div>
+                            <div><span className="label">Precision</span><div>{r.metrics?.precision}</div></div>
+                            <div><span className="label">Recall</span><div>{r.metrics?.recall}</div></div>
+                            <div><span className="label">F1</span><div>{r.metrics?.f1}</div></div>
+                          </div>
+                          <div className="muted" style={{ marginTop: 8 }}>Time: {secs} · Finished: {new Date(r.finishedAt).toLocaleTimeString()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </section>
+        );
+      })()}
 
       {SHOW_LEGACY && (
         <>

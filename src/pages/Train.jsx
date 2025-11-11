@@ -68,54 +68,28 @@ export default function Train() {
    * then append to localStorage and show in the table.
    * Front-end only; replace with backend later.
    */
-  // const runNow = () => {
-  //   const combos = [];
-  //   selectedDatasets.forEach(ds => {
-  //     MODELS.forEach(m => {
-  //       combos.push({
-  //         id: String(Date.now()) + Math.random().toString(36).slice(2),
-  //         dataset: ds,
-  //         model: m,
-  //         startedAt: Date.now(),
-  //         finishedAt: Date.now(),
-  //         hyperparams: deepClone(paramsByModel[m]),
-  //         metrics: mockMetrics(),
-  //       });
-  //     });
-  //   });
-  //   // Append new results to any previously saved ones
-  //   const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  //   localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
-  //   setSessionRuns(combos);
-  // };
-  const runNow = async () => {
-    const results = [];
+  const runNow = () => {
+    const combos = [];
+    // Determine a session number for this run batch
+    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const maxSession = existing.reduce((max, r) => Math.max(max, Number.isFinite(r?.session) ? r.session : 0), 0);
+    const session = maxSession + 1;
 
-    for (const ds of selectedDatasets) {
-      try {
-        const body = {
+    selectedDatasets.forEach(ds => {
+      MODELS.forEach(m => {
+        const startedAt = Date.now();
+        const durationMs = mockDurationMs();
+        const finishedAt = startedAt + durationMs;
+        combos.push({
+          id: String(Date.now()) + Math.random().toString(36).slice(2),
           dataset: ds,
-          lgb_params: paramsByModel.LightGBM,
-          xgb_params: paramsByModel.XGBoost,
-          cbt_params: paramsByModel.CatBoost
-        };
-
-      console.log("Sending to backend:", body);
-
-      const res = await fetch(`${API_BASE}/train_lccde`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
-
-      const data = await res.json();
-      console.log("Backend returned:", data);
-
-      if (data.error) {
-        results.push({
-          dataset: ds,
-          model: "LCCDE",
-          metrics: { error: data.error }
+          model: m,
+          session,
+          startedAt,
+          finishedAt,
+          durationMs,
+          hyperparams: deepClone(paramsByModel[m]),
+          metrics: mockMetrics(),
         });
       } else {
           const runRecord = {
@@ -162,12 +136,13 @@ export default function Train() {
         model: "LCCDE",
         metrics: { error: err.message }
       });
-    }
-  }
-
-  setSessionRuns(results);
-};
-
+    });
+    // Append new results to any previously saved ones
+    const updated = [...existing, ...combos];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    // Navigate to Results to view the newly created session
+    window.location.hash = "#/results";
+  };
 
   return (
     <>
@@ -211,11 +186,11 @@ export default function Train() {
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="section__head" style={{ marginBottom: 12 }}>
+        <div className="card mt-12">
+          <div className="section__head mb-12">
             <div className="section__hint">Customize hyperparameters</div>
           </div>
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="grid gap-12">
             {MODELS.map((m) => (
               <fieldset key={m} className="hp">
                 <legend className="hp">{m}</legend>
@@ -240,43 +215,11 @@ export default function Train() {
           <span className="muted">
             {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
           </span>
-          <a className="btn" href="#/results" style={{ marginLeft: "auto" }}>Go to Results</a>
+          <a className="wf-oval ml-auto" href="#/results">Go to Results</a>
         </div>
       </section>
 
-      <section className="section">
-        <div className="section__head">
-          <h2 className="section__title">Session Results</h2>
-          <div className="section__hint">
-            {sessionRuns.length ? `${sessionRuns.length} completed` : "no runs yet"}
-          </div>
-        </div>
-        <div className="card table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Dataset</th><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessionRuns.length === 0 ? (
-                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Model”.</td></tr>
-              ) : (
-                sessionRuns.map(r => (
-                  <tr key={r.id}>
-                    <td>{r.dataset}</td>
-                    <td>{r.model}</td>
-                    <td>{r.metrics?.ensemble_results?.accuracy ?? "—"}</td>
-                    <td>{r.metrics?.ensemble_results?.precision ?? "—"}</td>
-                    <td>{r.metrics?.ensemble_results?.recall ?? "—"}</td>
-                    <td>{r.metrics?.ensemble_results?.f1 ?? "—"}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {/* Session Results moved to Results page */}
     </>
   );
 }
@@ -349,4 +292,10 @@ function mockMetrics() {
   const recall = rnd(0.84, 0.12);
   const f1 = +((2 * precision * recall) / (precision + recall)).toFixed(4);
   return { accuracy: rnd(0.86, 0.12), precision, recall, f1 };
+}
+
+// Mock duration: 2.0s to 9.0s (random)
+function mockDurationMs() {
+  const min = 2000, max = 9000;
+  return Math.floor(min + Math.random() * (max - min));
 }
