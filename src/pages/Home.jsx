@@ -13,7 +13,7 @@ export default function Home() {
       <section className="hero">
         <div className="hero__inner">
           <h1 className="hero-title">Get Started</h1>
-          <p className="hero-subtitle">Choose a path to begin</p>
+          <p className="hero-subtitle"></p>
   
           <div className="hero-grid">
             {/* Card linking to the training page */}
