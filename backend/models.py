@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timezone
+from sqlalchemy.sql import func
 
 db = SQLAlchemy()
 
@@ -10,9 +11,16 @@ class ModelRun(db.Model):
     model_name = db.Column(db.String(64), nullable=False)
     params = db.Column(db.JSON, nullable=False)
     results = db.Column(db.JSON, nullable=False)
-    duration_s = db.Column(db.Float)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    duration_s = db.Column(db.Numeric(10, 3))
+    created_at = db.Column(db.DateTime(timezone=True), server_default=func.now())
+    updated_at = db.Column(
+        db.DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now()
+    )
+    
+    #created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    #updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
