@@ -7,7 +7,7 @@ import {useForm} from "react-hook-form";
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
 const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-// Fixed models (read-only UI for now)
+// Models 
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters per model (used by the editor below)
@@ -29,8 +29,9 @@ export default function Train() {
   // Hyperparameter editor is always visible
   // Hyperparameters by model name
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
-  // Runs created this session (also saved to localStorage)
-  const [sessionRuns, setSessionRuns] = useState([]);
+  // Local session state not needed now that Session Results moved to Results page
+
+  // Session results moved to Results; no preloading needed here
 
   // Toggle helper to add/remove an item in an array state
   const toggle = (arr, setArr, value) =>
