@@ -12,7 +12,11 @@ const DATASETS = [
   "CICIDS2017_sample_km.csv",
   "IoT_2020_multi_0.05.csv"
 ];
+<<<<<<< HEAD
 // Models 
+=======
+//models in LCCDE
+>>>>>>> e6ce22b (landing page additons)
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters per model (used by the editor below)

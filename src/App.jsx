@@ -143,6 +143,7 @@ export default function App() {
 
   return (
     <div>
+<<<<<<< HEAD
       <header className="shell-header">
         <div className="container shell-header__inner">
           {/* Brand links home */}
@@ -154,6 +155,29 @@ export default function App() {
           </nav>
         </div>
       </header>
+=======
+      {showHeader && (
+        <header className="shell-header">
+          <div className="container shell-header__inner">
+            {/* Brand links home */}
+            <a href="#/home" className="brand-pill">
+              IDS Trainer
+            </a>
+            <nav className="toolbar">
+              <a className="btn" href="#/train">
+                Train
+              </a>
+              <a className="btn" href="#/results">
+                Results
+              </a>
+              <button className="btn" onClick={downloadAllCSV}>
+                Download CSV
+              </button>
+            </nav>
+          </div>
+        </header>
+      )}
+>>>>>>> 0b752b3 (landing page additons)
 
       <main className="container" style={{ paddingTop: 16, paddingBottom: 24 }}>
         {page}
