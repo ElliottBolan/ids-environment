@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report,confusion_matrix,accuracy_score, precision_score, recall_score, f1_score
+from sklearn.preprocessing import LabelEncoder
 from imblearn.over_sampling import SMOTE
 import lightgbm as lgb
 import catboost as cbt
@@ -22,7 +23,6 @@ def resolve_dataset_path(filename):
         raise FileNotFoundError(f"Dataset not found at {path}")
     return path
 
-# This function is basically the same as the notebook, only with configurable parameters
 def prepare_data(file_path='./CICIDS2017_sample_km.csv', label_col='Label', smote_strategy=None, random_state=0, test_size=0.2):
     try:
         df = pd.read_csv(file_path)
@@ -30,21 +30,68 @@ def prepare_data(file_path='./CICIDS2017_sample_km.csv', label_col='Label', smot
         raise ValueError(f"Dataset not found: {file_path}")
     except Exception as e:
         raise ValueError(f"Failed to read dataset: {e}")
-    
+
+
     if label_col not in df.columns:
         raise ValueError(f"Label column '{label_col}' not found in dataset")
 
+    # Convert labels to numeric if needed
+    if df[label_col].dtype == object or df[label_col].dtype == 'category':
+        le = LabelEncoder()
+        df[label_col] = le.fit_transform(df[label_col])
+        print("Label encoding applied:", dict(zip(le.classes_, le.transform(le.classes_))))
+
     X = df.drop([label_col], axis=1)
     y = df[label_col]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state) #stratify=y if len(np.unique(y)) > 1 else None
+
+    # Convert all features to numeric (non-numeric to NaN)
+    X = X.apply(pd.to_numeric, errors='coerce')
+
+    # Replace inf with NaN
+    X = X.replace([np.inf, -np.inf], np.nan)
+
+    # Fill remaining NaN with median of each column
+    X = X.fillna(X.median(numeric_only=True))
+
+    # After cleaning X, proceed with splitting
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+
+    # Check if requested classes exist in y
     if smote_strategy:
-        try:
-            sm = SMOTE(sampling_strategy=smote_strategy, random_state=random_state)
-            X_train, y_train = sm.fit_resample(X_train, y_train)
-        except Exception as e:
-            raise ValueError(f"SMOTE failed: {e}")
-        
+        missing = [cls for cls in smote_strategy.keys() if cls not in y.unique()]
+        if missing:
+            print(f"[SMOTE] Classes missing from dataset → skipping SMOTE: {missing}")
+            smote_strategy = None
+
+
     return X_train, X_test, y_train, y_test
+
+
+# # This function is basically the same as the notebook, only with configurable parameters
+# def prepare_data(file_path='./CICIDS2017_sample_km.csv', label_col='Label', smote_strategy=None, random_state=0, test_size=0.2):
+#     try:
+#         df = pd.read_csv(file_path)
+#     except FileNotFoundError:
+#         raise ValueError(f"Dataset not found: {file_path}")
+#     except Exception as e:
+#         raise ValueError(f"Failed to read dataset: {e}")
+    
+#     if label_col not in df.columns:
+#         raise ValueError(f"Label column '{label_col}' not found in dataset")
+
+#     X = df.drop([label_col], axis=1)
+#     y = df[label_col]
+#     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=random_state) #stratify=y if len(np.unique(y)) > 1 else None
+#     if smote_strategy:
+#         try:
+#             sm = SMOTE(sampling_strategy=smote_strategy, random_state=random_state)
+#             X_train, y_train = sm.fit_resample(X_train, y_train)
+#         except Exception as e:
+#             raise ValueError(f"SMOTE failed: {e}")
+        
+#     return X_train, X_test, y_train, y_test
 
 # Again, this function changes nothing, but does include configurable parameters
 def train_base_models(X_train, y_train, lgb_params=None, xgb_params=None, cbt_params=None):
