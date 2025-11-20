@@ -221,45 +221,6 @@ def get_experiments():
         print("ERROR in GET /api/experiments:", e)
         return jsonify({"error": "Failed to retrieve experiments"}), 500
 
-@app.route("/api/experiments", methods=["POST"])
-def add_experiment():
-    try:
-        data = request.get_json()
-
-        # Extract and validate input
-        model_name = data.get("model_name")
-        params = data.get("params")
-        results = data.get("results")
-        duration_s = data.get("duration_s")
-
-        # Basic input validation
-        if not all([model_name, params, results]):
-            return jsonify({"error": "Missing required fields"}), 400
-
-        # Create a new instance of ModelRun
-        #new_run = ModelRun(
-            #model_name=model_name,
-           # params=params,
-          #  results=results,
-         #   duration_s=duration_s
-        #)
-
-        # Add to database
-        new_run = ModelRun.create_run(model_name, params, results, duration_s)
-        #db.session.add(new_run)
-        #db.session.commit()
-
-        return jsonify(new_run.to_dict()), 201
-        #return jsonify({
-        #    "message": "Experiment inserted successfully!",
-        #    "experiment_id": new_run.id
-        #}), 201
-
-    except Exception as e:
-        db.session.rollback()
-        print("Error inserting experiment:", e)
-        return jsonify({"error": "Failed to insert experiment"}), 500
-
 # Get details for one experiment by ID (Integrate with MySQL DB once that's up through a query by ID)
 @app.route("/api/experiments/<int:exp_id>", methods=["GET"])
 def get_experiment(exp_id):
