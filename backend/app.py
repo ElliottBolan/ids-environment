@@ -2,6 +2,11 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from LCCDE import train_lccde_pipeline
 import json
+from validation import (
+    validate_lgb_params,
+    validate_xgb_params,
+    validate_cbt_params
+)
 
 app = Flask(__name__)
 # Allow requests from the React dev server (and others) during development
@@ -76,50 +81,50 @@ def get_model_parameters(model_name):
     return jsonify({"model": model_name, "default_parameters": params})
 
 # Run training & testing for a model with the given parameters (test using Postman)
-@app.route("/api/train_lccde", methods=["POST"])
-def train_lccde():
-    try:
-        # Extract parameters from the POST request body
-        params = request.get_json() or {}
-        # Default values if missing
-        dataset = params.get("dataset", "CICIDS2017_sample_km.csv")
-        label_col = params.get("label_col", "Label")
-        smote_strategy = params.get("smote_strategy", {2:1000, 4:1000})
-        random_state = params.get("random_state", 0)
-        test_size = params.get("test_size", 0.2)
-        lgb_params = params.get("lgb_params", None)
-        xgb_params = params.get("xgb_params", None)
-        cbt_params = params.get("cbt_params", None)
+# @app.route("/api/train_lccde", methods=["POST"])
+# def train_lccde():
+#     try:
+#         # Extract parameters from the POST request body
+#         params = request.get_json() or {}
+#         # Default values if missing
+#         dataset = params.get("dataset", "CICIDS2017_sample_km.csv")
+#         label_col = params.get("label_col", "Label")
+#         smote_strategy = params.get("smote_strategy", {2:1000, 4:1000})
+#         random_state = params.get("random_state", 0)
+#         test_size = params.get("test_size", 0.2)
+#         lgb_params = params.get("lgb_params", None)
+#         xgb_params = params.get("xgb_params", None)
+#         cbt_params = params.get("cbt_params", None)
 
-        if isinstance(smote_strategy, dict):
-            smote_strategy = {int(k): v for k, v in smote_strategy.items()}
+#         if isinstance(smote_strategy, dict):
+#             smote_strategy = {int(k): v for k, v in smote_strategy.items()}
 
-        # Run the LCCDE pipeline
-        results = train_lccde_pipeline(
-            file_path=dataset,
-            label_col=label_col,
-            smote_strategy=smote_strategy,
-            random_state=random_state,
-            test_size=test_size,
-            lgb_params=lgb_params,
-            xgb_params=xgb_params,
-            cbt_params=cbt_params
-        )
+#         # Run the LCCDE pipeline
+#         results = train_lccde_pipeline(
+#             file_path=dataset,
+#             label_col=label_col,
+#             smote_strategy=smote_strategy,
+#             random_state=random_state,
+#             test_size=test_size,
+#             lgb_params=lgb_params,
+#             xgb_params=xgb_params,
+#             cbt_params=cbt_params
+#         )
 
-        # Return the performance metrics
-        json_str = json.dumps(make_json_safe(results), indent=2)
+#         # Return the performance metrics
+#         json_str = json.dumps(make_json_safe(results), indent=2)
 
-        return app.response_class(
-            response=json_str,
-            status=200,
-            mimetype="application/json"
-        )
+#         return app.response_class(
+#             response=json_str,
+#             status=200,
+#             mimetype="application/json"
+#         )
 
-    except Exception as e:
-        import traceback
-        print("ERROR in /train_lccde:", e)
-        traceback.print_exc()  # full traceback in your terminal
-        return jsonify({"error": str(e)}), 400
+#     except Exception as e:
+#         import traceback
+#         print("ERROR in /train_lccde:", e)
+#         traceback.print_exc()  # full traceback in your terminal
+#         return jsonify({"error": str(e)}), 400
 
 @app.route("/train_lccde", methods=["POST"])
 def train_lccde():
@@ -132,9 +137,12 @@ def train_lccde():
         smote_strategy = params.get("smote_strategy", {2:1000, 4:1000})
         random_state = params.get("random_state", 0)
         test_size = params.get("test_size", 0.2)
-        lgb_params = params.get("lgb_params", None)
-        xgb_params = params.get("xgb_params", None)
-        cbt_params = params.get("cbt_params", None)
+        # lgb_params = params.get("lgb_params", None)
+        # xgb_params = params.get("xgb_params", None)
+        # cbt_params = params.get("cbt_params", None)
+        lgb_params = validate_lgb_params(params.get("lgb_params"))
+        xgb_params = validate_xgb_params(params.get("xgb_params"))
+        cbt_params = validate_cbt_params(params.get("cbt_params"))
 
         if isinstance(smote_strategy, dict):
             smote_strategy = {int(k): v for k, v in smote_strategy.items()}
@@ -200,7 +208,7 @@ def add_experiment():
         #}), 201
 
     except Exception as e:
-        db.session.rollback()
+        # db.session.rollback()
         print("Error inserting experiment:", e)
         return jsonify({"error": "Failed to insert experiment"}), 500
 
@@ -213,6 +221,6 @@ def get_experiment(exp_id):
     return jsonify(exp)
 
 if __name__ == "__main__":
-    with app.app_context():
-        db.create_all()
+    # with app.app_context():
+        # db.create_all()
     app.run(port=5000, debug=True) # Port 5000 serves our APIs
