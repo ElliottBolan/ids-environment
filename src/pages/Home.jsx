@@ -6,10 +6,28 @@
   This page is intentionally minimal; it just routes the user.
 */
 
-import React from "react";
+// src/pages/Home.jsx
+import React, { useEffect, useState } from "react";
+import { API_BASE } from "../api";
 import { Brain, BarChart3 } from "lucide-react";
 
 export default function Home() {
+  const [backendStatus, setBackendStatus] = useState("Checking...");
+
+  // On page load, verify backend is up
+  useEffect(() => {
+  fetch(`${API_BASE}/api/hello`)
+    .then((res) => res.json())
+    .then((data) => {
+      console.log("Backend status:", data.message);
+      setBackendStatus(data.message); // sends status message to console
+    })
+    .catch(() => {
+      console.error("Backend unreachable!");
+      setBackendStatus("Cannot reach backend");
+    });
+}, []);
+
   return (
     <div className="page-center min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 to-gray-100">
       <section className="hero text-center p-6">

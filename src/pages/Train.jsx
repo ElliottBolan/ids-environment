@@ -2,11 +2,16 @@
 // Training UI (front-end only): pick datasets, tweak params, save mock runs.
 // Data persists in localStorage under `ids-runs-simple` and is shown in Results.
 import React, { useState } from "react";
-import {useForm} from "react-hook-form";
+import { API_BASE } from "../api";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
-const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
+// const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
+const DATASETS = [
+  "CICIDS2017_sample.csv",
+  "CICIDS2017_sample_km.csv",
+  "IoT_2020_multi_0.05.csv"
+];
 // Models 
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
@@ -63,26 +68,106 @@ export default function Train() {
    * then append to localStorage and show in the table.
    * Front-end only; replace with backend later.
    */
-  const runNow = () => {
-    const combos = [];
-    selectedDatasets.forEach(ds => {
-      MODELS.forEach(m => {
-        combos.push({
-          id: String(Date.now()) + Math.random().toString(36).slice(2),
+  // const runNow = () => {
+  //   const combos = [];
+  //   selectedDatasets.forEach(ds => {
+  //     MODELS.forEach(m => {
+  //       combos.push({
+  //         id: String(Date.now()) + Math.random().toString(36).slice(2),
+  //         dataset: ds,
+  //         model: m,
+  //         startedAt: Date.now(),
+  //         finishedAt: Date.now(),
+  //         hyperparams: deepClone(paramsByModel[m]),
+  //         metrics: mockMetrics(),
+  //       });
+  //     });
+  //   });
+  //   // Append new results to any previously saved ones
+  //   const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+  //   localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
+  //   setSessionRuns(combos);
+  // };
+  const runNow = async () => {
+    const results = [];
+
+    for (const ds of selectedDatasets) {
+      try {
+        const body = {
           dataset: ds,
-          model: m,
-          startedAt: Date.now(),
-          finishedAt: Date.now(),
-          hyperparams: deepClone(paramsByModel[m]),
-          metrics: mockMetrics(),
-        });
+          lgb_params: paramsByModel.LightGBM,
+          xgb_params: paramsByModel.XGBoost,
+          cbt_params: paramsByModel.CatBoost
+        };
+
+      console.log("Sending to backend:", body);
+
+      const res = await fetch(`${API_BASE}/train_lccde`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
       });
-    });
-    // Append new results to any previously saved ones
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
-    setSessionRuns(combos);
-  };
+
+      const data = await res.json();
+      console.log("Backend returned:", data);
+
+      if (data.error) {
+        results.push({
+          dataset: ds,
+          model: "LCCDE",
+          metrics: { error: data.error }
+        });
+      } else {
+          const runRecord = {
+            id: Date.now(),
+            dataset: ds,
+            model: "LCCDE",
+            metrics: {
+              accuracy: data.lccde.accuracy,
+              precision: data.lccde.precision,
+              recall: data.lccde.recall,
+              f1: data.lccde.f1_weighted
+            },
+            duration_s: data.duration_s,
+            params: body
+          };
+
+          results.push(runRecord);
+
+          // save to database
+          try {
+            const saveRes = await fetch(`${API_BASE}/api/experiments`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model_name: "LCCDE",
+                params: body,
+                results: data.lccde,
+                duration_s: data.duration_s
+              })
+            });
+
+            const saved = await saveRes.json();
+            console.log("Saved to DB:", saved);
+          } catch (dbErr) {
+            console.error("DB save failed:", dbErr);
+          }
+        }
+
+
+    } catch (err) {
+      console.error("Training failed:", err);
+      results.push({
+        dataset: ds,
+        model: "LCCDE",
+        metrics: { error: err.message }
+      });
+    }
+  }
+
+  setSessionRuns(results);
+};
+
 
   return (
     <>
@@ -181,10 +266,10 @@ export default function Train() {
                   <tr key={r.id}>
                     <td>{r.dataset}</td>
                     <td>{r.model}</td>
-                    <td>{r.metrics.accuracy}</td>
-                    <td>{r.metrics.precision}</td>
-                    <td>{r.metrics.recall}</td>
-                    <td>{r.metrics.f1}</td>
+                    <td>{r.metrics?.ensemble_results?.accuracy ?? "—"}</td>
+                    <td>{r.metrics?.ensemble_results?.precision ?? "—"}</td>
+                    <td>{r.metrics?.ensemble_results?.recall ?? "—"}</td>
+                    <td>{r.metrics?.ensemble_results?.f1 ?? "—"}</td>
                   </tr>
                 ))
               )}
