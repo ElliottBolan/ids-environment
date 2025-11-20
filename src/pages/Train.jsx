@@ -1,45 +1,61 @@
 // src/pages/Train.jsx 
+// Training UI (front-end only): pick datasets, tweak params, save mock runs.
+// Data persists in localStorage under `ids-runs-simple` and is shown in Results.
 import React, { useState } from "react";
 
 const STORAGE_KEY = "ids-runs-simple";
+// Available datasets (replace with backend-fed list later)
 const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-const MODELS = ["XGBoost", "Random Forest", "SVM", "Logistic Regression", "MLP", "LightGBM", "CatBoost"];
+// Fixed models (read-only UI for now)
+const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
+// Default hyperparameters per model (used by the editor below)
 const DEFAULT_HP = {
-  "XGBoost": { n_estimators: 400, max_depth: 6, learning_rate: 0.1, subsample: 0.8, colsample_bytree: 0.8, reg_lambda: 1.0 },
-  "Random Forest": { n_estimators: 300, max_depth: 20, max_features: "sqrt", min_samples_split: 2 },
-  "SVM": { C: 1.0, kernel: "rbf", gamma: "scale" },
-  "Logistic Regression": { penalty: "l2", C: 1.0, max_iter: 500, solver: "lbfgs" },
-  "MLP": { hidden_layer_sizes: "128,64", activation: "relu", alpha: 0.0001, learning_rate_init: 0.001, max_iter: 300 },
   "LightGBM": { n_estimators: 500, num_leaves: 31, learning_rate: 0.1, max_depth: -1 },
+  "XGBoost": { n_estimators: 400, max_depth: 6, learning_rate: 0.1, subsample: 0.8, colsample_bytree: 0.8, reg_lambda: 1.0 },
   "CatBoost": { iterations: 500, depth: 6, learning_rate: 0.1, l2_leaf_reg: 3.0 }
 };
+// JSON clone for safe immutable updates (avoid non-JSON values)
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
 export default function Train() {
+  // Selected datasets for the run matrix
   const [selectedDatasets, setSelectedDatasets] = useState([]);
-  const [selectedModels, setSelectedModels] = useState([]);
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  // Models are fixed to all MODELS (kept in state for future flexibility)
+  const [selectedModels, setSelectedModels] = useState(MODELS);
+  // Hyperparameter editor is always visible
+  // Hyperparameters by model name
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
+  // Runs created this session (also saved to localStorage)
   const [sessionRuns, setSessionRuns] = useState([]);
 
+  // Toggle helper to add/remove an item in an array state
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
 
-  const canRun = selectedDatasets.length > 0 && selectedModels.length > 0;
+  // Enable Run only when at least one dataset is chosen
+  const canRun = selectedDatasets.length > 0;
 
+  // Model selection UI removed; models are fixed.
+
+  /** Reset all model hyperparameters to defaults. */
   const resetSelectedParams = () => {
     setParamsByModel((prev) => {
       const next = deepClone(prev);
-      selectedModels.forEach(m => { next[m] = deepClone(DEFAULT_HP[m]); });
+      MODELS.forEach(m => { next[m] = deepClone(DEFAULT_HP[m]); });
       return next;
     });
   };
 
+  /**
+   * Build dataset×model combos with hyperparams and mock metrics,
+   * then append to localStorage and show in the table.
+   * Front-end only; replace with backend later.
+   */
   const runNow = () => {
     const combos = [];
     selectedDatasets.forEach(ds => {
-      selectedModels.forEach(m => {
+      MODELS.forEach(m => {
         combos.push({
           id: String(Date.now()) + Math.random().toString(36).slice(2),
           dataset: ds,
@@ -51,6 +67,7 @@ export default function Train() {
         });
       });
     });
+    // Append new results to any previously saved ones
     const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
     setSessionRuns(combos);
@@ -64,6 +81,7 @@ export default function Train() {
           <div className="section__hint">{selectedDatasets.length} selected</div>
         </div>
         <div className="card grid">
+          {/* Dataset checkboxes drive the run matrix */}
           {DATASETS.map(ds => (
             <label key={ds} className="checkbox-row">
               <input
@@ -79,48 +97,41 @@ export default function Train() {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Choose Models</h2>
+          <h2 className="section__title">Models</h2>
           <div className="toolbar">
-            <button className="btn" onClick={() => setShowAdvanced(s => !s)}>
-              {showAdvanced ? "Hide Advanced" : "Advanced"}
-            </button>
-            {showAdvanced && (
-              <button className="btn" onClick={resetSelectedParams}>Reset Selected</button>
-            )}
+            <button className="btn" onClick={resetSelectedParams}>Reset All</button>
           </div>
         </div>
-        <div className="card grid">
-          {MODELS.map(m => (
-            <label key={m} className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={selectedModels.includes(m)}
-                onChange={() => toggle(selectedModels, setSelectedModels, m)}
-              />
-              <span>{m}</span>
-            </label>
-          ))}
+        <div className="card">
+          <div className="section__hint">Using all models:</div>
+          <div className="grid" style={{ marginTop: 8 }}>
+            {/* Read-only list of models (could be toggles later) */}
+            {MODELS.map(m => (
+              <div key={m} className="checkbox-row" aria-label={`Model ${m}`}>
+                <input type="checkbox" checked readOnly aria-hidden="true" />
+                <span>{m}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {showAdvanced && selectedModels.length > 0 && (
-          <div className="card" style={{ marginTop: 12 }}>
-            <div className="section__head" style={{ marginBottom: 12 }}>
-              <div className="section__hint">Customize hyperparameters (per selected model)</div>
-            </div>
-            <div style={{ display: "grid", gap: 12 }}>
-              {selectedModels.map((m) => (
-                <fieldset key={m} className="hp">
-                  <legend className="hp">Hyperparameters — {m}</legend>
-                  <ModelParamsEditor
-                    model={m}
-                    value={paramsByModel[m]}
-                    onChange={(next) => setParamsByModel(prev => ({ ...prev, [m]: next }))}
-                  />
-                </fieldset>
-              ))}
-            </div>
+        <div className="card" style={{ marginTop: 12 }}>
+          <div className="section__head" style={{ marginBottom: 12 }}>
+            <div className="section__hint">Customize hyperparameters</div>
           </div>
-        )}
+          <div style={{ display: "grid", gap: 12 }}>
+            {MODELS.map((m) => (
+              <fieldset key={m} className="hp">
+                <legend className="hp">Hyperparameters — {m}</legend>
+                <ModelParamsEditor
+                  model={m}
+                  value={paramsByModel[m]}
+                  onChange={(next) => setParamsByModel(prev => ({ ...prev, [m]: next }))}
+                />
+              </fieldset>
+            ))}
+          </div>
+        </div>
       </section>
 
       <section className="section">
@@ -131,7 +142,7 @@ export default function Train() {
         <div className="card toolbar">
           <button className="btn" disabled={!canRun} onClick={runNow}>Run Models</button>
           <span className="muted">
-            {selectedDatasets.length} dataset(s), {selectedModels.length} model(s) selected
+            {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
           </span>
           <a className="btn" href="#/results" style={{ marginLeft: "auto" }}>Go to Results</a>
         </div>
@@ -174,7 +185,9 @@ export default function Train() {
   );
 }
 
+// Editor for a model's hyperparameters (controlled inputs)
 function ModelParamsEditor({ model, value, onChange }) {
+  // Common input bindings: numeric vs text. Empty string permits editing.
   const set = (k, v) => onChange({ ...value, [k]: v });
   const num = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value === "" ? "" : Number(e.target.value)) });
   const txt = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value) });
@@ -258,6 +271,7 @@ function ModelParamsEditor({ model, value, onChange }) {
   }
 }
 
+/** Small label+control wrapper used across parameter forms. */
 function Field({ label, children }) {
   return (
     <div className="field">
@@ -267,6 +281,7 @@ function Field({ label, children }) {
   );
 }
 
+// Mock metrics with light randomness (placeholder for real training output)
 function mockMetrics() {
   const rnd = (base = 0.86, span = 0.12) => +(base + Math.random() * span).toFixed(4);
   const precision = rnd(0.84, 0.12);
