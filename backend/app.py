@@ -181,10 +181,45 @@ def train_lccde():
         traceback.print_exc()  # full traceback in your terminal
         return jsonify({"error": str(e)}), 400
 
-# Get a list of previous experiments (again, will have to modify to account for a MySQL DB by querying all 'experiment' rows)
+# Get a list of previous experiments
 @app.route("/api/experiments", methods=["GET"])
 def get_experiments():
-    return jsonify({"experiments": MOCK_EXPERIMENTS})
+    try:
+        # query params
+        model = request.args.get("model")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+
+        # Base query
+        query = ModelRun.query
+
+        # Filter by model
+        if model:
+            query = query.filter_by(model_name=model)
+
+        # Filter by date range
+        if start_date:
+            query = query.filter(ModelRun.created_at >= start_date)
+
+        if end_date:
+            query = query.filter(ModelRun.created_at <= end_date)
+
+        # Sorting + pagination
+        query = query.order_by(ModelRun.created_at.desc())
+        runs = query.limit(limit).offset(offset).all()
+
+        experiments = [run.to_dict() for run in runs]
+
+        return jsonify({
+            "count": len(experiments),
+            "results": experiments
+        })
+
+    except Exception as e:
+        print("ERROR in GET /api/experiments:", e)
+        return jsonify({"error": "Failed to retrieve experiments"}), 500
 
 @app.route("/api/experiments", methods=["POST"])
 def add_experiment():
