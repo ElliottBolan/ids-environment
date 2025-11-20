@@ -7,14 +7,14 @@ import os
 import time
 from models import db, ModelRun
 
-# --- Load environment variables ---
+# load env vars
 load_dotenv()
 
 app = Flask(__name__)
 # Allow requests from the React dev server (and others) during development
 CORS(app)
 
-# --- Configure Database ---
+# Configure database
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST = os.getenv("DB_HOST", "localhost")
@@ -92,33 +92,33 @@ def get_model_parameters(model_name):
         return jsonify({"error": "Model not found"}), 404
     return jsonify({"model": model_name, "default_parameters": params})
 
-# Run training & testing for a model with the given parameters (test using Postman)
-@app.route("/api/train", methods=["POST"])
-def train_model():
-    data = request.json
-    model = data.get("model")
-    params = data.get("parameters", {})
-    dataset = data.get("dataset", "unknown.csv") # Will likely only be using the CICIDS2017 dataset
+# # Run training & testing for a model with the given parameters (test using Postman)
+# @app.route("/api/train", methods=["POST"])
+# def train_model():
+#     data = request.json
+#     model = data.get("model")
+#     params = data.get("parameters", {})
+#     dataset = data.get("dataset", "unknown.csv") # Will likely only be using the CICIDS2017 dataset
 
-    # Fake "training" simulation for the time being
-    print(f"Training {model} with parameters {params} on {dataset}")
-    time.sleep(2)  # simulate training time
+#     # Fake "training" simulation for the time being
+#     print(f"Training {model} with parameters {params} on {dataset}")
+#     time.sleep(2)  # simulate training time
 
-    # Return mock results (we will have to integrate the logic from LCCDE_IDS_GlobeCom22.ipynb, but we just need the structure for now)
-    results = {
-        "model": model,
-        "parameters": params,
-        "accuracy": round(0.9 + 0.05 * (time.time() % 1), 3),
-        "precision": 0.89,
-        "recall": 0.88,
-        "f1_score": 0.885,
-        "dataset": dataset,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }
+#     # Return mock results (we will have to integrate the logic from LCCDE_IDS_GlobeCom22.ipynb, but we just need the structure for now)
+#     results = {
+#         "model": model,
+#         "parameters": params,
+#         "accuracy": round(0.9 + 0.05 * (time.time() % 1), 3),
+#         "precision": 0.89,
+#         "recall": 0.88,
+#         "f1_score": 0.885,
+#         "dataset": dataset,
+#         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+#     }
 
-    # Here, we'll have to insert these results into our DB following our schema
+#     # Here, we'll have to insert these results into our DB following our schema
 
-    return jsonify(results)
+#     return jsonify(results)
 
 @app.route("/train_lccde", methods=["POST"])
 def train_lccde():
@@ -159,57 +159,90 @@ def train_lccde():
         traceback.print_exc()  # full traceback in your terminal
         return jsonify({"error": str(e)}), 400
 
-# Get a list of previous experiments (again, will have to modify to account for a MySQL DB by querying all 'experiment' rows)
+# Get a list of previous experiments
 @app.route("/api/experiments", methods=["GET"])
 def get_experiments():
-    return jsonify({"experiments": MOCK_EXPERIMENTS})
+    try:
+        # query params
+        model = request.args.get("model")
+        start_date = request.args.get("start_date")
+        end_date = request.args.get("end_date")
+        limit = int(request.args.get("limit", 50))
+        offset = int(request.args.get("offset", 0))
+
+        # Base query
+        query = ModelRun.query
+
+        # Filter by model
+        if model:
+            query = query.filter_by(model_name=model)
+
+        # Filter by date range
+        if start_date:
+            query = query.filter(ModelRun.created_at >= start_date)
+
+        if end_date:
+            query = query.filter(ModelRun.created_at <= end_date)
+
+        # Sorting + pagination
+        query = query.order_by(ModelRun.created_at.desc())
+        runs = query.limit(limit).offset(offset).all()
+
+        experiments = [run.to_dict() for run in runs]
+
+        return jsonify({
+            "count": len(experiments),
+            "results": experiments
+        })
+
+    except Exception as e:
+        print("ERROR in GET /api/experiments:", e)
+        return jsonify({"error": "Failed to retrieve experiments"}), 500
+
 
 @app.route("/api/experiments", methods=["POST"])
 def add_experiment():
     try:
         data = request.get_json()
 
-        # Extract and validate input
-        model_name = data.get("model_name")
-        params = data.get("params")
-        results = data.get("results")
-        duration_s = data.get("duration_s")
+        model_name  = data.get("model_name")
+        params      = data.get("params")
+        results     = data.get("results")
+        duration_s  = data.get("duration_s")
 
-        # Basic input validation
-        if not all([model_name, params, results]):
+        # Basic validation
+        if not model_name or not params or not results:
             return jsonify({"error": "Missing required fields"}), 400
 
-        # Create a new instance of ModelRun
-        #new_run = ModelRun(
-            #model_name=model_name,
-           # params=params,
-          #  results=results,
-         #   duration_s=duration_s
-        #)
+        # Create a new run using ModelRun
+        new_run = ModelRun.create_run(
+            model_name=model_name,
+            params=params,
+            results=results,
+            duration_s=duration_s
+        )
 
-        # Add to database
-        new_run = ModelRun.create_run(model_name, params, results, duration_s)
-        #db.session.add(new_run)
-        #db.session.commit()
-
-        return jsonify(new_run.to_dict()), 201
-        #return jsonify({
-        #    "message": "Experiment inserted successfully!",
-        #    "experiment_id": new_run.id
-        #}), 201
+        return jsonify({
+            "message": "Experiment saved successfully",
+            "experiment": new_run.to_dict()
+        }), 201
 
     except Exception as e:
         db.session.rollback()
         print("Error inserting experiment:", e)
         return jsonify({"error": "Failed to insert experiment"}), 500
 
-# Get details for one experiment by ID (Integrate with MySQL DB once that's up through a query by ID)
-@app.route("/api/experiments/<int:exp_id>", methods=["GET"])
-def get_experiment(exp_id):
-    exp = next((e for e in MOCK_EXPERIMENTS if e["id"] == exp_id), None)
-    if not exp:
+
+# Get details for one experiment by ID
+@app.route("/api/experiments/<int:run_id>", methods=["GET"])
+def get_experiment(run_id):
+    run = ModelRun.query.get(run_id)
+
+    if not run:
         return jsonify({"error": "Experiment not found"}), 404
-    return jsonify(exp)
+
+    return jsonify(run.to_dict())
+
 
 if __name__ == "__main__":
     with app.app_context():
