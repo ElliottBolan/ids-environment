@@ -3,7 +3,6 @@
 // Data persists in localStorage under `ids-runs-simple` and is shown in Results.
 import React, { useState } from "react";
 import { API_BASE } from "../api";
-import {useForm} from "react-hook-form";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
