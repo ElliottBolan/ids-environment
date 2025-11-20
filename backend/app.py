@@ -6,6 +6,11 @@ from LCCDE import train_lccde_pipeline
 import os
 import time
 from models import db, ModelRun
+from validation import (
+    validate_lgb_params,
+    validate_xgb_params,
+    validate_cbt_params
+)
 
 # load env vars
 load_dotenv()
@@ -131,9 +136,9 @@ def train_lccde():
         smote_strategy = params.get("smote_strategy", {2:1000, 4:1000})
         random_state = params.get("random_state", 0)
         test_size = params.get("test_size", 0.2)
-        lgb_params = params.get("lgb_params", None)
-        xgb_params = params.get("xgb_params", None)
-        cbt_params = params.get("cbt_params", None)
+        lgb_params = validate_lgb_params(params.get("lgb_params"))
+        xgb_params = validate_xgb_params(params.get("xgb_params"))
+        cbt_params = validate_cbt_params(params.get("cbt_params"))
 
         if isinstance(smote_strategy, dict):
             smote_strategy = {int(k): v for k, v in smote_strategy.items()}
