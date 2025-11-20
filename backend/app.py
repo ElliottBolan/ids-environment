@@ -93,33 +93,6 @@ def get_model_parameters(model_name):
     return jsonify({"model": model_name, "default_parameters": params})
 
 # Run training & testing for a model with the given parameters (test using Postman)
-@app.route("/api/train", methods=["POST"])
-def train_model():
-    data = request.json
-    model = data.get("model")
-    params = data.get("parameters", {})
-    dataset = data.get("dataset", "unknown.csv") # Will likely only be using the CICIDS2017 dataset
-
-    # Fake "training" simulation for the time being
-    print(f"Training {model} with parameters {params} on {dataset}")
-    time.sleep(2)  # simulate training time
-
-    # Return mock results (we will have to integrate the logic from LCCDE_IDS_GlobeCom22.ipynb, but we just need the structure for now)
-    results = {
-        "model": model,
-        "parameters": params,
-        "accuracy": round(0.9 + 0.05 * (time.time() % 1), 3),
-        "precision": 0.89,
-        "recall": 0.88,
-        "f1_score": 0.885,
-        "dataset": dataset,
-        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
-    }
-
-    # Here, we'll have to insert these results into our DB following our schema
-
-    return jsonify(results)
-
 @app.route("/train_lccde", methods=["POST"])
 def train_lccde():
     try:
@@ -150,8 +123,57 @@ def train_lccde():
             cbt_params=cbt_params
         )
 
-        # Return the performance metrics
-        return jsonify(make_json_safe(results))
+        results_safe = make_json_safe(results)
+
+        # Prepare the DB payload
+        """
+        Recall our DB schema:
+        1. id (auto-incremented)
+        2. model_name (Just LCCDE for now, not NULL)
+        3. params (JSON, cannot be NULL)
+        4. results (JSON, cannot be NULL)
+        5. duration_s (DECIMAL(10, 3), not NULL)
+        6. created_at (timestamp)
+        7. updated_at (timestamp)
+        """
+
+        db_model_name = "LCCDE"
+        db_params = {
+            "dataset": dataset,
+            "label_col": label_col,
+            "smote_strategy": smote_strategy,
+            "random_state": random_state,
+            "test_size": test_size,
+            "lgb_params": lgb_params,
+            "xgb_params": xgb_params,
+            "cbt_params": cbt_params
+        }
+
+        # Try inserting into DB
+        try:
+            # Using our create_run classmethod in ModelRun
+            new_run = ModelRun.create_run(
+                model_name=db_model_name,
+                params=db_params,
+                results=results_safe,
+                duration_s=results_safe.get('duration_s')
+            )
+
+            # Return both results and experiment metadata (id + timestamps)
+            response = {
+                "experiment": new_run.to_dict(),
+                "results": results_safe
+            }
+            return jsonify(response), 201
+        except Exception as db_e:
+            # If DB insertion fails, still return results but include an error note
+            db.session.rollback()
+            print("DB insert failed after training:", db_e)
+            return jsonify({
+                "warning": "Training succeeded but saving to DB failed",
+                "db_error": str(db_e),
+                "results": results_safe
+            }), 200
 
     except Exception as e:
         import traceback

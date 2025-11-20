@@ -29,8 +29,10 @@ class ModelRun(db.Model):
             "params": self.params,
             "results": self.results,
             "duration_s": str(self.duration_s) if self.duration_s else None,
-            "created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
-            "updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S") if self.updated_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            #"created_at": self.created_at.strftime("%Y-%m-%d %H:%M:%S") if self.created_at else None,
+            #"updated_at": self.updated_at.strftime("%Y-%m-%d %H:%M:%S") if self.updated_at else None,
         }
     
     @classmethod
@@ -43,5 +45,8 @@ class ModelRun(db.Model):
         )
         db.session.add(run)
         db.session.commit()
+
+        # refresh to get timestamps, id
+        db.session.refresh(run)
         return run
 
