@@ -1,7 +1,7 @@
 // src/pages/Train.jsx 
 // Training UI (front-end only): pick datasets, tweak params, save mock runs.
 // Data persists in localStorage under `ids-runs-simple` and is shown in Results.
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
@@ -21,13 +21,12 @@ const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 export default function Train() {
   // Selected datasets for the run matrix
   const [selectedDatasets, setSelectedDatasets] = useState([]);
-  // Models are fixed to all MODELS (kept in state for future flexibility)
-  const [selectedModels, setSelectedModels] = useState(MODELS);
   // Hyperparameter editor is always visible
   // Hyperparameters by model name
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
-  // Runs created this session (also saved to localStorage)
-  const [sessionRuns, setSessionRuns] = useState([]);
+  // Local session state not needed now that Session Results moved to Results page
+
+  // Session results moved to Results; no preloading needed here
 
   // Toggle helper to add/remove an item in an array state
   const toggle = (arr, setArr, value) =>
@@ -54,23 +53,34 @@ export default function Train() {
    */
   const runNow = () => {
     const combos = [];
+    // Determine a session number for this run batch
+    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const maxSession = existing.reduce((max, r) => Math.max(max, Number.isFinite(r?.session) ? r.session : 0), 0);
+    const session = maxSession + 1;
+
     selectedDatasets.forEach(ds => {
       MODELS.forEach(m => {
+        const startedAt = Date.now();
+        const durationMs = mockDurationMs();
+        const finishedAt = startedAt + durationMs;
         combos.push({
           id: String(Date.now()) + Math.random().toString(36).slice(2),
           dataset: ds,
           model: m,
-          startedAt: Date.now(),
-          finishedAt: Date.now(),
+          session,
+          startedAt,
+          finishedAt,
+          durationMs,
           hyperparams: deepClone(paramsByModel[m]),
           metrics: mockMetrics(),
         });
       });
     });
     // Append new results to any previously saved ones
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
-    setSessionRuns(combos);
+    const updated = [...existing, ...combos];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    // Navigate to Results to view the newly created session
+    window.location.hash = "#/results";
   };
 
   return (
@@ -104,7 +114,7 @@ export default function Train() {
         </div>
         <div className="card">
           <div className="section__hint">Using all models:</div>
-          <div className="grid" style={{ marginTop: 8 }}>
+          <div className="grid mt-8">
             {/* Read-only list of models (could be toggles later) */}
             {MODELS.map(m => (
               <div key={m} className="checkbox-row" aria-label={`Model ${m}`}>
@@ -115,11 +125,11 @@ export default function Train() {
           </div>
         </div>
 
-        <div className="card" style={{ marginTop: 12 }}>
-          <div className="section__head" style={{ marginBottom: 12 }}>
+        <div className="card mt-12">
+          <div className="section__head mb-12">
             <div className="section__hint">Customize hyperparameters</div>
           </div>
-          <div style={{ display: "grid", gap: 12 }}>
+          <div className="grid gap-12">
             {MODELS.map((m) => (
               <fieldset key={m} className="hp">
                 <legend className="hp">Hyperparameters — {m}</legend>
@@ -140,47 +150,15 @@ export default function Train() {
           <div className="section__hint">Launch experiments</div>
         </div>
         <div className="card toolbar">
-          <button className="btn" disabled={!canRun} onClick={runNow}>Run Models</button>
+          <button className="wf-oval" disabled={!canRun} onClick={runNow}>Run Models</button>
           <span className="muted">
             {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
           </span>
-          <a className="btn" href="#/results" style={{ marginLeft: "auto" }}>Go to Results</a>
+          <a className="wf-oval ml-auto" href="#/results">Go to Results</a>
         </div>
       </section>
 
-      <section className="section">
-        <div className="section__head">
-          <h2 className="section__title">Session Results</h2>
-          <div className="section__hint">
-            {sessionRuns.length ? `${sessionRuns.length} completed` : "no runs yet"}
-          </div>
-        </div>
-        <div className="card table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Dataset</th><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sessionRuns.length === 0 ? (
-                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Models”.</td></tr>
-              ) : (
-                sessionRuns.map(r => (
-                  <tr key={r.id}>
-                    <td>{r.dataset}</td>
-                    <td>{r.model}</td>
-                    <td>{r.metrics.accuracy}</td>
-                    <td>{r.metrics.precision}</td>
-                    <td>{r.metrics.recall}</td>
-                    <td>{r.metrics.f1}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      {/* Session Results moved to Results page */}
     </>
   );
 }
@@ -288,4 +266,10 @@ function mockMetrics() {
   const recall = rnd(0.84, 0.12);
   const f1 = +((2 * precision * recall) / (precision + recall)).toFixed(4);
   return { accuracy: rnd(0.86, 0.12), precision, recall, f1 };
+}
+
+// Mock duration: 2.0s to 9.0s (random)
+function mockDurationMs() {
+  const min = 2000, max = 9000;
+  return Math.floor(min + Math.random() * (max - min));
 }

@@ -1,6 +1,6 @@
 // src/pages/Results.jsx 
 // Results browser backed by localStorage: list, select, export CSV, delete all.
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 const STORAGE_KEY = "ids-runs-simple";
 
 export default function Results() {
@@ -8,6 +8,25 @@ export default function Results() {
   // Selected rows map: { [id]: true }
   const [selected, setSelected] = useState({});
   const selectedRows = useMemo(() => runs.filter(r => selected[r.id]), [runs, selected]);
+  // Wireframe: simple tab state to preview the latest run per model
+  const MODELS = ["LightGBM","XGBoost","CatBoost"];
+  const [activeModel, setActiveModel] = useState(MODELS[1]);
+  // Show/hide legacy Results blocks below the wireframe
+  const SHOW_LEGACY = false;
+
+  const latestForModel = (m) => runs
+    .filter(r => r.model === m)
+    .slice()
+    .sort((a,b) => b.finishedAt - a.finishedAt)[0];
+  const activeRun = latestForModel(activeModel);
+
+  // Pick the model with the highest accuracy among latest-per-model runs
+  const selectBestByAccuracy = () => {
+    const latest = MODELS.map(m => latestForModel(m)).filter(Boolean);
+    if (!latest.length) return;
+    const best = latest.reduce((a, b) => ((a?.metrics?.accuracy ?? -Infinity) >= (b?.metrics?.accuracy ?? -Infinity) ? a : b));
+    if (best?.model) setActiveModel(best.model);
+  };
 
   const refresh = () => setRuns(readRuns());
   const clearAll = () => {
@@ -21,9 +40,10 @@ export default function Results() {
   const downloadCSV = () => {
     // Export selected rows, or everything if none selected
     const rows = selectedRows.length ? selectedRows : runs;
-    const headers = ["id","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
+    const headers = ["id","session","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
     const mapped = rows.map(r => ({
       id: r.id,
+      session: r.session,
       dataset: r.dataset,
       model: r.model,
       accuracy: r.metrics?.accuracy,
@@ -37,83 +57,180 @@ export default function Results() {
     downloadText("ids_runs.csv", csv, "text/csv");
   };
 
+  // On first load, if runs exist, auto-select the model with best accuracy
+  useEffect(() => {
+    if (runs && runs.length) selectBestByAccuracy();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <>
-      <section className="section">
-        <div className="section__head">
-          <h2 className="section__title">Results</h2>
-          <div className="section__hint">{runs.length} total</div>
+      {/* Wireframe-style header and model display */}
+      <section className="wf-shell">
+        <div className="wf-topbar">
+          <a className="wf-back" href="#/train">← Go back</a>
+          <h1 className="wf-title">LCCDE Model Display</h1>
         </div>
-        <div className="card toolbar">
-          <button className="btn" onClick={refresh}>Refresh</button>
-          <button className="btn" onClick={downloadCSV}>Download CSV</button>
-          <button className="btn" onClick={clearAll}>Delete All</button>
+
+        <div className="wf-tabs">
+          {MODELS.map(m => (
+            <button
+              key={m}
+              className={`wf-tab ${activeModel === m ? 'is-active' : ''}`}
+              onClick={() => setActiveModel(m)}
+            >{m}</button>
+          ))}
+        </div>
+
+        <div className="wf-content">
+          <div className="wf-heatmap">
+            {/* Placeholder image area; swap to real confusion matrix when available */}
+            <div className="wf-heatmap__placeholder">Confusion Matrix</div>
+            <div className="wf-times muted">
+              Cpu time(total): 18.1 s · Wall time: 11.7 s
+            </div>
+          </div>
+
+          <div className="wf-metrics">
+            <div><span className="wf-metric__label">Accuracy:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.accuracy)}</span></div>
+            <div><span className="wf-metric__label">Precision:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.precision)}</span></div>
+            <div><span className="wf-metric__label">Recall:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.recall)}</span></div>
+            <div><span className="wf-metric__label">F1 :</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.f1)}</span></div>
+          </div>
+
+          {/* Compare Models button removed as requested */}
         </div>
       </section>
 
-      {selectedRows.length >= 1 && (
-        <section className="section">
-          <div className="section__head">
-            <h2 className="section__title">Hyperparameters</h2>
-            <div className="section__hint">{selectedRows.length} selected</div>
-          </div>
-          <div className="card" style={{ display: "grid", gap: 12 }}>
-            {selectedRows.map(r => (
-              <div key={r.id} className="card" style={{ padding: 12 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                  {r.dataset} — {r.model} <span className="muted">({new Date(r.finishedAt).toLocaleString()})</span>
+      {/* Session History: show all sessions in reverse order (latest first) */}
+      {(() => {
+        const withSession = runs.filter(r => Number.isFinite(r.session));
+        if (!withSession.length) return null;
+        const sessionsDesc = Array.from(new Set(withSession.map(r => r.session))).sort((a,b) => b - a);
+        return (
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">Session Results</h2>
+              <div className="section__hint">{withSession.length} total runs · {sessionsDesc.length} sessions</div>
+            </div>
+            {sessionsDesc.map(s => {
+              const sruns = withSession.filter(r => r.session === s).slice().sort((a,b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
+              return (
+                <div key={s} className="section" style={{ marginBottom: 12 }}>
+                  <div className="section__head">
+                    <h3 className="section__title">Session #{s}</h3>
+                    <div className="section__hint">{sruns.length} completed</div>
+                  </div>
+                  <div className="grid grid-runs">
+                    {sruns.map(r => {
+                      const dur = typeof r.durationMs === 'number' ? r.durationMs : (r.finishedAt && r.startedAt ? (r.finishedAt - r.startedAt) : null);
+                      const secs = dur != null ? (dur / 1000).toFixed(1) + ' s' : '—';
+                      return (
+                        <div key={r.id} className="card run-card">
+                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{r.dataset} — {r.model}</div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                            <div><span className="label">Accuracy</span><div>{r.metrics?.accuracy}</div></div>
+                            <div><span className="label">Precision</span><div>{r.metrics?.precision}</div></div>
+                            <div><span className="label">Recall</span><div>{r.metrics?.recall}</div></div>
+                            <div><span className="label">F1</span><div>{r.metrics?.f1}</div></div>
+                          </div>
+                          <div className="muted" style={{ marginTop: 8 }}>Time: {secs} · Finished: {new Date(r.finishedAt).toLocaleTimeString()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-                <pre className="textarea" style={{ margin: 0 }}>
-{JSON.stringify(r.hyperparams ?? {}, null, 2)}
-                </pre>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
+              );
+            })}
+          </section>
+        );
+      })()}
 
-      <section className="section">
-        <div className="section__head">
-          <h2 className="section__title">All Runs</h2>
-          <div className="section__hint">Newest first</div>
-        </div>
-        <div className="card table-wrap">
-          {runs.length === 0 ? (
-            <div className="muted">No runs yet. Run some experiments on the Train page.</div>
-          ) : (
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Pick</th>
-                  <th>Dataset</th>
-                  <th>Model</th>
-                  <th>Accuracy</th>
-                  <th>Precision</th>
-                  <th>Recall</th>
-                  <th>F1</th>
-                  <th>Finished</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.slice().sort((a,b) => b.finishedAt - a.finishedAt).map(r => (
-                  <tr key={r.id}>
-                    <td><input type="checkbox" checked={!!selected[r.id]} onChange={() => toggle(r.id)} /></td>
-                    <td>{r.dataset}</td>
-                    <td>{r.model}</td>
-                    <td>{r.metrics?.accuracy}</td>
-                    <td>{r.metrics?.precision}</td>
-                    <td>{r.metrics?.recall}</td>
-                    <td>{r.metrics?.f1}</td>
-                    <td>{new Date(r.finishedAt).toLocaleString()}</td>
-                  </tr>
+      {SHOW_LEGACY && (
+        <>
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">Results</h2>
+              <div className="section__hint">{runs.length} total</div>
+            </div>
+            <div className="card toolbar">
+              <button className="btn" onClick={refresh}>Refresh</button>
+              <button className="btn" onClick={downloadCSV}>Download CSV</button>
+              <button className="btn" onClick={clearAll}>Delete All</button>
+            </div>
+          </section>
+
+          {selectedRows.length >= 1 && (
+            <section className="section">
+              <div className="section__head">
+                <h2 className="section__title">Hyperparameters</h2>
+                <div className="section__hint">{selectedRows.length} selected</div>
+              </div>
+              <div className="card" style={{ display: "grid", gap: 12 }}>
+                {selectedRows.map(r => (
+                  <div key={r.id} className="card" style={{ padding: 12 }}>
+                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                      {r.dataset} — {r.model} <span className="muted">({new Date(r.finishedAt).toLocaleString()})</span>
+                    </div>
+                    <pre className="textarea" style={{ margin: 0 }}>
+{JSON.stringify(r.hyperparams ?? {}, null, 2)}
+                    </pre>
+                  </div>
                 ))}
-              </tbody>
-            </table>
+              </div>
+            </section>
           )}
-        </div>
-      </section>
+
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">All Runs</h2>
+              <div className="section__hint">Newest first</div>
+            </div>
+            <div className="card table-wrap">
+              {runs.length === 0 ? (
+                <div className="muted">No runs yet. Run some experiments on the Train page.</div>
+              ) : (
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Pick</th>
+                      <th>Dataset</th>
+                      <th>Model</th>
+                      <th>Accuracy</th>
+                      <th>Precision</th>
+                      <th>Recall</th>
+                      <th>F1</th>
+                      <th>Finished</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runs.slice().sort((a,b) => b.finishedAt - a.finishedAt).map(r => (
+                      <tr key={r.id}>
+                        <td><input type="checkbox" checked={!!selected[r.id]} onChange={() => toggle(r.id)} /></td>
+                        <td>{r.dataset}</td>
+                        <td>{r.model}</td>
+                        <td>{r.metrics?.accuracy}</td>
+                        <td>{r.metrics?.precision}</td>
+                        <td>{r.metrics?.recall}</td>
+                        <td>{r.metrics?.f1}</td>
+                        <td>{new Date(r.finishedAt).toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </section>
+        </>
+      )}
     </>
   );
+}
+
+// Format metric (0..1) to percentage with one decimal; dash if missing
+function fmt(v) {
+  if (typeof v !== "number" || Number.isNaN(v)) return "—";
+  return `${(v * 100).toFixed(1)}%`;
 }
 
 function readRuns() {
