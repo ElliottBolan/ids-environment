@@ -6,17 +6,12 @@ import { API_BASE } from "../api";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
-// const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
 const DATASETS = [
   "CICIDS2017_sample.csv",
   "CICIDS2017_sample_km.csv",
   "IoT_2020_multi_0.05.csv"
 ];
-<<<<<<< HEAD
-// Models 
-=======
 //models in LCCDE
->>>>>>> e6ce22b (landing page additons)
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters per model (used by the editor below)
@@ -72,28 +67,34 @@ export default function Train() {
    * then append to localStorage and show in the table.
    * Front-end only; replace with backend later.
    */
-  const runNow = () => {
-    const combos = [];
-    // Determine a session number for this run batch
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    const maxSession = existing.reduce((max, r) => Math.max(max, Number.isFinite(r?.session) ? r.session : 0), 0);
-    const session = maxSession + 1;
+  const runNow = async () => {
+    const results = [];
 
-    selectedDatasets.forEach(ds => {
-      MODELS.forEach(m => {
-        const startedAt = Date.now();
-        const durationMs = mockDurationMs();
-        const finishedAt = startedAt + durationMs;
-        combos.push({
-          id: String(Date.now()) + Math.random().toString(36).slice(2),
+    for (const ds of selectedDatasets) {
+      try {
+        const body = {
           dataset: ds,
-          model: m,
-          session,
-          startedAt,
-          finishedAt,
-          durationMs,
-          hyperparams: deepClone(paramsByModel[m]),
-          metrics: mockMetrics(),
+          lgb_params: paramsByModel.LightGBM,
+          xgb_params: paramsByModel.XGBoost,
+          cbt_params: paramsByModel.CatBoost
+        };
+
+      console.log("Sending to backend:", body);
+
+      const res = await fetch(`${API_BASE}/train_lccde`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      console.log("Backend returned:", data);
+
+      if (data.error) {
+        results.push({
+          dataset: ds,
+          model: "LCCDE",
+          metrics: { error: data.error }
         });
       } else {
           const runRecord = {
@@ -140,12 +141,10 @@ export default function Train() {
         model: "LCCDE",
         metrics: { error: err.message }
       });
-    });
-    // Append new results to any previously saved ones
-    const updated = [...existing, ...combos];
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    // Navigate to Results to view the newly created session
-    window.location.hash = "#/results";
+    }
+  }
+
+  setSessionRuns(results);
   };
 
   return (
@@ -226,7 +225,7 @@ export default function Train() {
       {/* Session Results moved to Results page */}
     </>
   );
-}
+};
 
 // Editor for a model's hyperparameters (controlled inputs)
 function ModelParamsEditor({ model, value, onChange }) {
