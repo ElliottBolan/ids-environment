@@ -10,11 +10,7 @@
     "lucide-react": "^0.553.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-<<<<<<< HEAD
-    "react-router-dom": "^7.9.5",
-=======
     "react-router-dom": "^7.9.6",
->>>>>>> e50d82c (integrate training and saving results to db w/ frontend)
     "react-scripts": "5.0.1",
     "three": "^0.181.1",
     "vanta": "^0.5.24",
