@@ -1,9 +1,25 @@
 import React from "react";
 import Scripts from "./Scripts"
+import toast from "react-hot-toast";
 
 export default function LandingPage() {
   const goHome = () => {
     window.location.hash = "#/home"; 
+    toast.loading("Checking if model is running…", { id: "model" });
+
+    // Simulate checking model status
+    setTimeout(() => {
+      // If model is running
+      const modelRunning = true;  // replace this with real logic
+
+      if (modelRunning) {
+        toast.success("Model is currently running!", { id: "model" });
+      } else {
+        toast.error("Model is NOT running.", { id: "model" });
+      }
+
+      window.location.hash = "#/home";
+    }, 1200);
   };
 
   return (

@@ -5,6 +5,7 @@ import Home from "./pages/Home.jsx";
 import Train from "./pages/Train.jsx";
 import Results from "./pages/Results.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
+import { Toaster } from "react-hot-toast";
 
 // Shared CSV helpers and download action from header
 const STORAGE_KEY = "ids-runs-simple";
@@ -98,11 +99,13 @@ export default function App() {
   const showHeader = !(route === "/" || route === "");
 
   return (
-    <div>
+    <>
+      <Toaster position="top-center" reverseOrder={false} />
+      <div>
       <header className="shell-header">
         <div className="container shell-header__inner">
           {/* Brand links home */}
-          <a href="#/" className="brand-pill">Welcome to IDS-System</a>
+          <a href="#/" className="brand-pill">IDS Trainer</a>
           <nav className="toolbar">
             {/* Hash links; no router lib */}
             <a className="btn" href="#/train">Train</a>
@@ -115,5 +118,6 @@ export default function App() {
         {page}
       </main>
     </div>
+    </>
   );
 }

@@ -8,6 +8,9 @@ export default function Results() {
   // Selected rows map: { [id]: true } (legacy table)
   const [selected, setSelected] = useState({});
   const selectedRows = useMemo(() => runs.filter(r => selected[r.id]), [runs, selected]);
+   // Session comparison selections (limit to two sessions)
+   const [selectedSessions, setSelectedSessions] = useState([]);
+   const [compareSessions, setCompareSessions] = useState([]);
   // Wireframe: simple tab state to preview the latest run per model
   const MODELS = ["LightGBM","XGBoost","CatBoost"];
   const [activeModel, setActiveModel] = useState(MODELS[1]);
