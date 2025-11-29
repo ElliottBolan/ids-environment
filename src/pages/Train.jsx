@@ -2,17 +2,23 @@
 // Training UI (front-end only): pick datasets, tweak params, save mock runs.
 // Data persists in localStorage under `ids-runs-simple` and is shown in Results.
 import React, { useState } from "react";
+import toast from "react-hot-toast";
 import { API_BASE } from "../api";
+import { useForm } from "react-hook-form";
+import { HyParamRules } from "./HyParamRules";
 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
-// const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-const DATASETS = [
-  "CICIDS2017_sample.csv",
-  "CICIDS2017_sample_km.csv",
-  "IoT_2020_multi_0.05.csv"
-];
-// Fixed models (read-only UI for now)
+const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
+//const DATASETS = ["CICIDS2017_sample.csv", "CICIDS2017_sample_km.csv", "IoT_2020_multi_0.05.csv"];
+
+// const DATASETS = [
+//   "CICIDS2017_sample.csv",
+//   "CICIDS2017_sample_km.csv",
+//   "IoT_2020_multi_0.05.csv"
+// ];
+
+//models in LCCDE
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters per model (used by the editor below)
@@ -27,21 +33,35 @@ const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 export default function Train() {
   // Selected datasets for the run matrix
   const [selectedDatasets, setSelectedDatasets] = useState([]);
+  
+  // select all button for datasets
+  //const [allDatasets, setAllDatasets] = dataList.map(item => item.id)
+
+  // Runs created this session (also saved to localStorage)
+  const [sessionRuns, setSessionRuns] = useState([]);
+
   // Hyperparameter editor is always visible
   // Hyperparameters by model name
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
   // Local session state not needed now that Session Results moved to Results page
 
-  const [sessionRuns, setSessionRuns] = useState([]);
-  
+  // Session results moved to Results; no preloading needed here
+
   // Toggle helper to add/remove an item in an array state
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
 
-  // Enable Run only when at least one dataset is chosen
+  // Enable Run only when at least one dataset is chosen 
   const canRun = selectedDatasets.length > 0;
 
-  // Model selection UI removed; models are fixed.
+  //const selectAllDs = (allDatasets, setArr) => {
+    //const isAllSelected = selectedIds.length === allItemIds.length && allItemIds.length > 0;
+    //setArr(allDatasets);
+  //}
+
+  //const deselectAll = (setSelectedArr) => {
+    //setSelectedArr([]); // Clear the selected array
+  //};
 
   /** Reset all model hyperparameters to defaults. */
   const resetSelectedParams = () => {
@@ -52,32 +72,42 @@ export default function Train() {
     });
   };
 
+  // Check all fields of all models
+  const allValid = MODELS.every(model => {
+    const params = paramsByModel[model];
+    const rules = HyParamRules[model];
+  
+    return Object.keys(rules).every(key => {
+      const val = params[key];
+
+      if (val === "" || val === null || val === undefined) {
+        return false;
+      }
+  
+      const min = rules[key].min;
+      const max = rules[key].max;
+  
+      if (typeof val !== "number" || Number.isNaN(val)) return false;
+      if (val < min) return false;
+      if (max !== undefined && val > max) return false;
+  
+      return true;
+    });
+  }); 
+
   /**
    * Build dataset×model combos with hyperparams and mock metrics,
    * then append to localStorage and show in the table.
    * Front-end only; replace with backend later.
    */
-  // const runNow = () => {
-  //   const combos = [];
-  //   selectedDatasets.forEach(ds => {
-  //     MODELS.forEach(m => {
-  //       combos.push({
-  //         id: String(Date.now()) + Math.random().toString(36).slice(2),
-  //         dataset: ds,
-  //         model: m,
-  //         startedAt: Date.now(),
-  //         finishedAt: Date.now(),
-  //         hyperparams: deepClone(paramsByModel[m]),
-  //         metrics: mockMetrics(),
-  //       });
-  //     });
-  //   });
-  //   // Append new results to any previously saved ones
-  //   const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-  //   localStorage.setItem(STORAGE_KEY, JSON.stringify([...existing, ...combos]));
-  //   setSessionRuns(combos);
-  // };
   const runNow = async () => {
+    if (!canRun || !allValid) {
+      toast.error("Please select datasets and fix invalid fields.");
+      return;
+    }
+
+    toast.loading("Running model...", { id: "run-status" });
+
     const results = [];
 
     for (const ds of selectedDatasets) {
@@ -89,91 +119,108 @@ export default function Train() {
           cbt_params: paramsByModel.CatBoost
         };
 
-      console.log("Sending to backend:", body);
+        console.log("Sending to backend:", body);
 
-      const res = await fetch(`${API_BASE}/train_lccde`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+        const res = await fetch(`${API_BASE}/train_lccde`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body)
+        });
 
-      const data = await res.json();
-      console.log("Backend returned:", data);
+        const data = await res.json();
+        console.log("Backend returned:", data);
 
-      if (data.error) {
+        if (data.error) {
+          results.push({
+            dataset: ds,
+            model: "LCCDE",
+            metrics: { error: data.error }
+          });
+          toast.error(`Error running on ${ds}: ${data.error}`);
+          continue;
+        }
+
+        // Build local session run record
+        const runRecord = {
+          id: Date.now() + Math.random(),
+          dataset: ds,
+          model: "LCCDE",
+          metrics: {
+            accuracy: data.lccde.accuracy,
+            precision: data.lccde.precision,
+            recall: data.lccde.recall,
+            f1: data.lccde.f1_weighted
+          },
+          duration_s: data.duration_s,
+          params: body
+        };
+
+        results.push(runRecord);
+
+        // Save to database
+        try {
+          const saveRes = await fetch(`${API_BASE}/api/experiments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model_name: "LCCDE",
+              params: body,
+              results: data.lccde,
+              duration_s: data.duration_s
+            })
+          });
+
+          const saved = await saveRes.json();
+          console.log("Saved to database:", saved);
+
+        } catch (dbErr) {
+          console.error("Database save failed:", dbErr);
+          toast.error("Failed to save to database.");
+        }
+
+        toast.success(`Finished training on ${ds}!`);
+
+      } catch (err) {
+        console.error("Training failed:", err);
         results.push({
           dataset: ds,
           model: "LCCDE",
-          metrics: { error: data.error }
+          metrics: { error: err.message }
         });
-      } else {
-          const runRecord = {
-            id: Date.now(),
-            dataset: ds,
-            model: "LCCDE",
-            metrics: {
-              accuracy: data.lccde.accuracy,
-              precision: data.lccde.precision,
-              recall: data.lccde.recall,
-              f1: data.lccde.f1_weighted
-            },
-            duration_s: data.duration_s,
-            params: body
-          };
 
-          results.push(runRecord);
-
-          // save to database
-          try {
-            const saveRes = await fetch(`${API_BASE}/api/experiments`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model_name: "LCCDE",
-                params: body,
-                results: data.lccde,
-                duration_s: data.duration_s
-              })
-            });
-
-            const saved = await saveRes.json();
-            console.log("Saved to DB:", saved);
-          } catch (dbErr) {
-            console.error("DB save failed:", dbErr);
-          }
-        }
-
-
-    } catch (err) {
-      console.error("Training failed:", err);
-      results.push({
-        dataset: ds,
-        model: "LCCDE",
-        metrics: { error: err.message }
-      });
+        toast.error(`Training failed on ${ds}: ${err.message}`);
+      }
     }
-  }
 
-  setSessionRuns(results);
-};
+    setSessionRuns(results);
+    toast.success("All tasks completed!", { id: "run-status" });
+  };
 
 
   return (
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Choose Datasets</h2>
-          <div className="section__hint">{selectedDatasets.length} selected</div>
+          <h2 className="section__title">Select Datasets</h2>
+          <div className="toolbar">
+            <button className="btn"
+              onClick={() => {
+                if (selectedDatasets.length === DATASETS.length) {
+                  setSelectedDatasets([]);
+                } else {
+                  setSelectedDatasets([...DATASETS]);
+                }
+              }}
+            >
+              {selectedDatasets.length === DATASETS.length ? "Deselect All" : "Select All"}
+            </button>
+          </div>
         </div>
         <div className="card grid">
           {/* Dataset checkboxes drive the run matrix */}
           {DATASETS.map(ds => (
             <label key={ds} className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={selectedDatasets.includes(ds)}
-                onChange={() => toggle(selectedDatasets, setSelectedDatasets, ds)}
-              />
+              <input type="checkbox" checked={selectedDatasets.includes(ds)} onChange={() => toggle(selectedDatasets, setSelectedDatasets, ds)}/>
               <span>{ds}</span>
             </label>
           ))}
@@ -188,12 +235,11 @@ export default function Train() {
           </div>
         </div>
         <div className="card">
-          <div className="section__hint">Using all models:</div>
-          <div className="grid mt-8">
+          <div className="section__hint">Within the LCCDE:</div>
+          <div className="grid" style={{ marginTop: 8 }}>
             {/* Read-only list of models (could be toggles later) */}
             {MODELS.map(m => (
               <div key={m} className="checkbox-row" aria-label={`Model ${m}`}>
-                <input type="checkbox" checked readOnly aria-hidden="true" />
                 <span>{m}</span>
               </div>
             ))}
@@ -207,7 +253,7 @@ export default function Train() {
           <div className="grid gap-12">
             {MODELS.map((m) => (
               <fieldset key={m} className="hp">
-                <legend className="hp">Hyperparameters — {m}</legend>
+                <legend className="hp">{m}</legend>
                 <ModelParamsEditor
                   model={m}
                   value={paramsByModel[m]}
@@ -225,7 +271,25 @@ export default function Train() {
           <div className="section__hint">Launch experiments</div>
         </div>
         <div className="card toolbar">
-          <button className="wf-oval" disabled={!canRun} onClick={runNow}>Run Models</button>
+          <button
+            className="btn"
+            onClick={() => {
+              if (!canRun) {
+                toast.error("Please select at least one dataset.");
+                return;
+              }
+              if (!allValid) {
+                toast.error("Please fix invalid hyperparameters first.");
+                return;
+              }
+              // show loading toast
+              toast.loading("Starting model run...", { id: "run-status" });
+              // call runNow
+              runNow();
+            }}
+          >
+            Run Model
+          </button>
           <span className="muted">
             {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
           </span>
@@ -233,96 +297,98 @@ export default function Train() {
         </div>
       </section>
 
-      {/* Session Results moved to Results page */}
+      <section className="section">
+        <div className="section__head">
+          <h2 className="section__title">Session Results</h2>
+          <div className="section__hint">
+            {sessionRuns.length ? `${sessionRuns.length} completed` : "no runs yet"}
+          </div>
+        </div>
+        <div className="card table-wrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Dataset</th><th>Model</th><th>Accuracy</th><th>Precision</th><th>Recall</th><th>F1</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessionRuns.length === 0 ? (
+                <tr><td className="muted" colSpan={6}>No results yet. Click “Run Model”.</td></tr>
+              ) : (
+                sessionRuns.map(r => (
+                  <tr key={r.id}>
+                    <td>{r.dataset}</td>
+                    <td>{r.model}</td>
+                    <td>{r.metrics.accuracy}</td>
+                    <td>{r.metrics.precision}</td>
+                    <td>{r.metrics.recall}</td>
+                    <td>{r.metrics.f1}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </>
   );
 }
 
 // Editor for a model's hyperparameters (controlled inputs)
 function ModelParamsEditor({ model, value, onChange }) {
-  // Common input bindings: numeric vs text. Empty string permits editing.
-  const set = (k, v) => onChange({ ...value, [k]: v });
-  const num = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value === "" ? "" : Number(e.target.value)) });
-  const txt = (k) => ({ value: value[k], onChange: (e) => set(k, e.target.value) });
+  const rules = HyParamRules[model];
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    mode: "onChange",
+    defaultValues: value
+  });
 
-  switch (model) {
-    case "XGBoost":
-      return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" min="1" step="1" {...num("max_depth")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="subsample"><input className="input" type="number" min="0.1" max="1" step="0.1" {...num("subsample")} /></Field>
-          <Field label="colsample_bytree"><input className="input" type="number" min="0.1" max="1" step="0.1" {...num("colsample_bytree")} /></Field>
-          <Field label="reg_lambda"><input className="input" type="number" min="0" step="0.1" {...num("reg_lambda")} /></Field>
-        </div>
-      );
-    case "Random Forest":
-      return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" min="1" step="1" {...num("max_depth")} /></Field>
-          <Field label="max_features">
-            <select className="select" {...txt("max_features")}>
-              <option value="sqrt">sqrt</option><option value="log2">log2</option><option value="auto">auto</option>
-            </select>
+  const set = (k, v) => onChange({ ...value, [k]: v });
+
+  const numProps = (k) => ({
+    ...register(k, {
+      required: "This field is required",  // blank is invalid
+      min: rules[k]?.min,
+      max: rules[k]?.max,
+      valueAsNumber: true
+    }),
+    value: value[k],
+    onChange: (e) => {
+      const raw = e.target.value;
+    
+      // If the field is blank, store blank
+      if (raw === "") {
+        set(k, ""); 
+        return;
+      }
+    
+      // Otherwise parse normally
+      const num = Number(raw);
+      set(k, num);
+    }
+    
+  });  
+
+  return (
+    <form onSubmit={handleSubmit((data) => console.log(data))}>
+      <div className="form-grid">
+        {Object.keys(rules).map(param => (
+          <Field key={param} label={param}>
+            <input
+              className="input"
+              type="number"
+              step="any"
+              {...numProps(param)}
+            />
+            {errors[param] && (
+              <span className="error-message">{errors[param].message || "Invalid"}</span>
+            )}
           </Field>
-          <Field label="min_samples_split"><input className="input" type="number" min="2" step="1" {...num("min_samples_split")} /></Field>
-        </div>
-      );
-    case "SVM":
-      return (
-        <div className="form-grid">
-          <Field label="C"><input className="input" type="number" min="0.01" step="0.01" {...num("C")} /></Field>
-          <Field label="kernel">
-            <select className="select" {...txt("kernel")}><option value="rbf">rbf</option><option value="linear">linear</option></select>
-          </Field>
-          <Field label="gamma">
-            <select className="select" {...txt("gamma")}><option value="scale">scale</option><option value="auto">auto</option></select>
-          </Field>
-        </div>
-      );
-    case "Logistic Regression":
-      return (
-        <div className="form-grid">
-          <Field label="penalty"><select className="select" {...txt("penalty")}><option value="l2">l2</option></select></Field>
-          <Field label="C"><input className="input" type="number" min="0.01" step="0.01" {...num("C")} /></Field>
-          <Field label="max_iter"><input className="input" type="number" min="100" step="50" {...num("max_iter")} /></Field>
-          <Field label="solver"><select className="select" {...txt("solver")}><option value="lbfgs">lbfgs</option><option value="saga">saga</option></select></Field>
-        </div>
-      );
-    case "MLP":
-      return (
-        <div className="form-grid">
-          <Field label="hidden_layer_sizes (e.g., 128,64)"><input className="input" type="text" {...txt("hidden_layer_sizes")} /></Field>
-          <Field label="activation"><select className="select" {...txt("activation")}><option value="relu">relu</option><option value="tanh">tanh</option></select></Field>
-          <Field label="alpha"><input className="input" type="number" min="0" step="0.0001" {...num("alpha")} /></Field>
-          <Field label="learning_rate_init"><input className="input" type="number" min="0" step="0.0001" {...num("learning_rate_init")} /></Field>
-          <Field label="max_iter"><input className="input" type="number" min="100" step="50" {...num("max_iter")} /></Field>
-        </div>
-      );
-    case "LightGBM":
-      return (
-        <div className="form-grid">
-          <Field label="n_estimators"><input className="input" type="number" min="1" step="1" {...num("n_estimators")} /></Field>
-          <Field label="num_leaves"><input className="input" type="number" min="2" step="1" {...num("num_leaves")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="max_depth"><input className="input" type="number" step="1" {...num("max_depth")} /></Field>
-        </div>
-      );
-    case "CatBoost":
-      return (
-        <div className="form-grid">
-          <Field label="iterations"><input className="input" type="number" min="10" step="10" {...num("iterations")} /></Field>
-          <Field label="depth"><input className="input" type="number" min="1" step="1" {...num("depth")} /></Field>
-          <Field label="learning_rate"><input className="input" type="number" min="0" step="0.01" {...num("learning_rate")} /></Field>
-          <Field label="l2_leaf_reg"><input className="input" type="number" min="0" step="0.1" {...num("l2_leaf_reg")} /></Field>
-        </div>
-      );
-    default:
-      return <div className="form-grid"><div>No editor for model: {model}</div></div>;
-  }
+        ))}
+      </div>
+    </form>
+  );
 }
+
 
 /** Small label+control wrapper used across parameter forms. */
 function Field({ label, children }) {
