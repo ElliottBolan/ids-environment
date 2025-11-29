@@ -32,8 +32,8 @@ export default function Train() {
   const [paramsByModel, setParamsByModel] = useState(() => deepClone(DEFAULT_HP));
   // Local session state not needed now that Session Results moved to Results page
 
-  // Session results moved to Results; no preloading needed here
-
+  const [sessionRuns, setSessionRuns] = useState([]);
+  
   // Toggle helper to add/remove an item in an array state
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);

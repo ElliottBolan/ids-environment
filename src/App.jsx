@@ -1,6 +1,9 @@
 // src/App.jsx 
 // Tiny SPA shell using hash-based routing (Home, Train, Results).
 import React from "react";
+import Home from "./pages/Home.jsx";
+import Train from "./pages/Train.jsx";
+import Results from "./pages/Results.jsx";
 
 // Shared CSV helpers and download action from header
 const STORAGE_KEY = "ids-runs-simple";
@@ -45,9 +48,7 @@ function downloadAllCSV() {
     console.error("Failed to export CSV", e);
   }
 }
-import Home from "./pages/Home.jsx";
-import Train from "./pages/Train.jsx";
-import Results from "./pages/Results.jsx";
+
 
 // Current route from location.hash (e.g., "#/train" -> "/train")
 function useHashRoute() {

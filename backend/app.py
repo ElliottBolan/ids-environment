@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
-from dotenv import load_dotenv
+from flask_sqlalchemy import SQLAlchemy # type: ignore
+from dotenv import load_dotenv # type: ignore
 from LCCDE import train_lccde_pipeline
 import os
 import time
