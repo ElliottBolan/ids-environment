@@ -5,12 +5,7 @@ import { API_BASE } from "../api";
 import { useForm } from "react-hook-form";
 import { HyParamRules } from "./HyParamRules";
 import { TableProperties } from "lucide-react";
- 
-const STORAGE_KEY = "ids-runs-simple";
-// Available datasets (replace with backend-fed list later)
-//const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-const DATASETS = ["CICIDS2017_sample.csv", "CICIDS2017_sample_km.csv", "IoT_2020_multi_0.05.csv"];
-//models in LCCDE
+
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters
