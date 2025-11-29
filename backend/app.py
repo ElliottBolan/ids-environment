@@ -56,7 +56,7 @@ def hello_world():
 # --- MOCK DATA ---
 AVAILABLE_MODELS = ["LCCDE"]
 
-MODEL_PARAMETERS = { # TBH I still don't have a good idea of all configurable parameters we need, so this map should be updated sometime later
+MODEL_PARAMETERS = { 
     "LCCDE": {
         "learning_rate": 0.01,
         "batch_size": 32,
@@ -65,7 +65,7 @@ MODEL_PARAMETERS = { # TBH I still don't have a good idea of all configurable pa
     }
 }
 
-MOCK_EXPERIMENTS = [ # This would translate to a table in our MySQL DB
+MOCK_EXPERIMENTS = [
     {
         "id": 1,
         "model": "LCCDE",
@@ -82,7 +82,7 @@ MOCK_EXPERIMENTS = [ # This would translate to a table in our MySQL DB
     }
 ]
 
-# --- API Routes ---
+# --- API ROUTES ---
 # List the available ML-based IDS models (just LCCDE for now)
 @app.route("/api/models", methods=["GET"])
 def get_models():
@@ -219,6 +219,26 @@ def get_experiment(run_id):
         return jsonify({"error": "Experiment not found"}), 404
 
     return jsonify(run.to_dict())
+
+
+@app.route("/api/datasets", methods=["GET"])
+def get_datasets():
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))  # backend/
+        dataset_dir = os.path.join(base_dir, "..", "src", "IDS-files", "datasets")
+
+        files = [
+            f for f in os.listdir(dataset_dir)
+            if f.lower().endswith(".csv")
+        ]
+
+        return jsonify({"datasets": files})
+
+    except Exception as e:
+        print("Error in /api/datasets:", e)
+        return jsonify({"error": "Could not load dataset list"}), 500
+
+
 
 
 if __name__ == "__main__":
