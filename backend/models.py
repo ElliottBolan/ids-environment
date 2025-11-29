@@ -1,6 +1,6 @@
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy # type: ignore
 from datetime import datetime, timezone
-from sqlalchemy.sql import func
+from sqlalchemy.sql import func # type: ignore
 
 db = SQLAlchemy()
 
