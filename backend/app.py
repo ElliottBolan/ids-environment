@@ -4,6 +4,7 @@ from LCCDE import train_lccde_pipeline
 import os
 import time
 from models import db, ModelRun
+from dotenv import load_dotenv
 
 # load env vars
 load_dotenv()
