@@ -65,51 +65,6 @@ function downloadAllCSV() {
   }
 }
 
-// Shared CSV helpers and download action from header
-const STORAGE_KEY = "ids-runs-simple";
-function toCSV(rows, headers) {
-  const esc = (v) => {
-    if (v == null) return "";
-    const s = String(v);
-    if (/[,"\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  };
-  const head = headers.map(esc).join(",");
-  const body = rows.map(r => headers.map(h => esc(r[h])).join(",")).join("\n");
-  return head + "\n" + body;
-}
-function downloadText(filename, text, type = "text/plain") {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-}
-function downloadAllCSV() {
-  try {
-    const runs = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    const headers = ["id","session","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
-    const mapped = runs.map(r => ({
-      id: r.id,
-      session: r.session,
-      dataset: r.dataset,
-      model: r.model,
-      accuracy: r.metrics?.accuracy,
-      precision: r.metrics?.precision,
-      recall: r.metrics?.recall,
-      f1: r.metrics?.f1,
-      finishedAt: r.finishedAt ? new Date(r.finishedAt).toLocaleString() : "",
-      hyperparams: JSON.stringify(r.hyperparams ?? {}),
-    }));
-    const csv = toCSV(mapped, headers);
-    downloadText("ids_runs.csv", csv, "text/csv");
-  } catch (e) {
-    console.error("Failed to export CSV", e);
-  }
-}
-
-
 // Current route from location.hash (e.g., "#/train" -> "/train")
 function useHashRoute() {
   const [route, setRoute] = React.useState(
