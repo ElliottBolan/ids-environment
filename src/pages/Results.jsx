@@ -1,7 +1,11 @@
 // src/pages/Results.jsx 
 // Results browser backed by localStorage: list, select, export CSV, delete all.
+
 import React, { useEffect, useMemo, useState } from "react";
+import { PreviousRuns } from "./Compare.jsx";
+import { API_BASE } from "../api";
 const STORAGE_KEY = "ids-runs-simple";
+
 
 export default function Results() {
   const [runs, setRuns] = useState(() => readRuns());
@@ -111,8 +115,12 @@ export default function Results() {
             <div><span className="wf-metric__label">Recall:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.recall)}</span></div>
             <div><span className="wf-metric__label">F1 :</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.f1)}</span></div>
           </div>
-
-          {/* Compare Models button removed as requested */}
+            <button
+              className="btn btn-lg"
+              onClick={() => (window.location.hash = "#/compare")}
+            >
+              Compare Previous Runs
+            </button>
         </div>
       </section>
 

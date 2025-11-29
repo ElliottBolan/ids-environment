@@ -6,11 +6,12 @@ import toast from "react-hot-toast";
 import { API_BASE } from "../api";
 import { useForm } from "react-hook-form";
 import { HyParamRules } from "./HyParamRules";
-
+import { TableProperties } from "lucide-react";
+ 
 const STORAGE_KEY = "ids-runs-simple";
 // Available datasets (replace with backend-fed list later)
-const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
-//const DATASETS = ["CICIDS2017_sample.csv", "CICIDS2017_sample_km.csv", "IoT_2020_multi_0.05.csv"];
+//const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
+const DATASETS = ["CICIDS2017_sample.csv", "CICIDS2017_sample_km.csv", "IoT_2020_multi_0.05.csv"];
 //models in LCCDE
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
@@ -44,7 +45,9 @@ export default function Train() {
   const toggle = (arr, setArr, value) =>
     setArr(arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value]);
 
-  // Enable Run only when at least one dataset is chosen 
+
+  
+    // Enable Run only when at least one dataset is chosen 
   const canRun = selectedDatasets.length > 0;
 
   //const selectAllDs = (allDatasets, setArr) => {
@@ -219,7 +222,7 @@ export default function Train() {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Models</h2>
+          <h2 className="section__title">Base Models</h2>
           <div className="toolbar">
             <button className="btn" onClick={resetSelectedParams}>Reset All</button>
           </div>
@@ -272,7 +275,7 @@ export default function Train() {
                 toast.error("Please fix invalid hyperparameters first.");
                 return;
               }
-              // show loading toast
+              // show loading toastx
               toast.loading("Starting model run...", { id: "run-status" });
               // call runNow
               runNow();
@@ -281,7 +284,7 @@ export default function Train() {
             Run Model
           </button>
           <span className="muted">
-            {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
+            {selectedDatasets.length} dataset(s)
           </span>
           <a className="btn" href="#/results" style={{ marginLeft: "auto" }}>Go to Results</a>
         </div>
@@ -354,6 +357,7 @@ function ModelParamsEditor({ model, value, onChange }) {
       // Otherwise parse normally
       const num = Number(raw);
       set(k, num);
+
     }
     
   });  
@@ -368,6 +372,16 @@ function ModelParamsEditor({ model, value, onChange }) {
               type="number"
               step="any"
               {...numProps(param)}
+              style={{
+                border: value[param] === "" || value[param] < rules[param].min.value ||
+                        (rules[param].max && value[param] > rules[param].max.value)
+                        ? "1.5px solid red"
+                        : undefined,
+                backgroundColor: value[param] === "" || value[param] < rules[param].min.value ||
+                                 (rules[param].max && value[param] > rules[param].max.value)
+                                 ? "#ffe6e6"
+                                 : undefined
+              }}
             />
             {errors[param] && (
               <span className="error-message">{errors[param].message || "Invalid"}</span>

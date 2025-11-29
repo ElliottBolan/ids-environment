@@ -5,6 +5,7 @@ import Home from "./pages/Home.jsx";
 import Train from "./pages/Train.jsx";
 import Results from "./pages/Results.jsx";
 import LandingPage from "./pages/LandingPage.jsx";
+import Compare from "./pages/Compare.jsx";
 import { Toaster } from "react-hot-toast";
 
 // Shared CSV helpers and download action from header
@@ -94,6 +95,7 @@ export default function App() {
   else if (route.startsWith("/home")) page = <Home />;
   else if (route.startsWith("/train")) page = <Train />;
   else if (route.startsWith("/results")) page = <Results />;
+  else if (route.startsWith("/compare")) page = <Compare />;
 
   // Hide header on landing page
   const showHeader = !(route === "/" || route === "");
@@ -101,23 +103,21 @@ export default function App() {
   return (
     <>
       <Toaster position="top-center" reverseOrder={false} />
-      <div>
-      <header className="shell-header">
-        <div className="container shell-header__inner">
-          {/* Brand links home */}
-          <a href="#/" className="brand-pill">IDS Trainer</a>
-          <nav className="toolbar">
-            {/* Hash links; no router lib */}
-            <a className="btn" href="#/train">Train</a>
-            <a className="btn" href="#/results">Results</a>
-          </nav>
-        </div>
-      </header>
+      {showHeader && (
+        <header className="shell-header">
+          <div className="container shell-header__inner">
+            <a href="#/" className="brand-pill">IDS Trainer</a>
+            <nav className="toolbar">
+              <a className="btn" href="#/train">Train</a>
+              <a className="btn" href="#/results">Results</a>
+            </nav>
+          </div>
+        </header>
+      )}
 
       <main className="container" style={{ paddingTop: 16, paddingBottom: 24 }}>
         {page}
       </main>
-    </div>
     </>
   );
 }
