@@ -6,9 +6,6 @@
   This page is intentionally minimal; it just routes the user.
 */
 
-// src/pages/Home.jsx
-
-// src/pages/Home.jsx
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../api";
 import { Brain, BarChart3 } from "lucide-react";
@@ -38,7 +35,6 @@ export default function Home() {
           <p className="hero-subtitle text-gray-500 text-lg">Choose what you want to do — train new models or explore past results.</p>
 
           <div className="hero-grid grid grid-cols-1 sm:grid-cols-2 gap-8 mt-8 max-w-3xl mx-auto">
-            {/* Card: Train Models */}
             <div className="card card--action card--accent hover:shadow-xl transition-transform transform hover:-translate-y-1 bg-white rounded-2xl p-6 border border-gray-200">
               <div className="flex flex-col items-center space-y-4">
                 <Brain size={40} className="text-blue-600" />

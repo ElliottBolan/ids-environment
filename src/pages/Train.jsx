@@ -4,8 +4,13 @@ import toast from "react-hot-toast";
 import { API_BASE } from "../api";
 import { useForm } from "react-hook-form";
 import { HyParamRules } from "./HyParamRules";
-
-// LCCDE models
+import { TableProperties } from "lucide-react";
+ 
+const STORAGE_KEY = "ids-runs-simple";
+// Available datasets (replace with backend-fed list later)
+//const DATASETS = ["UNSW-NB15", "CIC-IDS-2017", "KDD'99", "CIC-DDoS-2019"];
+const DATASETS = ["CICIDS2017_sample.csv", "CICIDS2017_sample_km.csv", "IoT_2020_multi_0.05.csv"];
+//models in LCCDE
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters
@@ -66,6 +71,9 @@ export default function Train() {
         : [...arr, value]
     );
 
+
+  
+    // Enable Run only when at least one dataset is chosen 
   const canRun = selectedDatasets.length > 0;
 
   // Reset hyperparameters
@@ -238,7 +246,7 @@ export default function Train() {
       {/* Models + Hyperparameters */}
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Models</h2>
+          <h2 className="section__title">Base Models</h2>
           <div className="toolbar">
             <button className="btn" onClick={resetSelectedParams}>
               Reset All
@@ -285,11 +293,27 @@ export default function Train() {
           <div className="section__hint">Launch experiments</div>
         </div>
         <div className="card toolbar">
-          <button className="btn" onClick={runNow}>
+          <button
+            className="btn"
+            onClick={() => {
+              if (!canRun) {
+                toast.error("Please select at least one dataset.");
+                return;
+              }
+              if (!allValid) {
+                toast.error("Please fix invalid hyperparameters first.");
+                return;
+              }
+              // show loading toastx
+              toast.loading("Starting model run...", { id: "run-status" });
+              // call runNow
+              runNow();
+            }}
+          >
             Run Model
           </button>
           <span className="muted">
-            {selectedDatasets.length} dataset(s), {MODELS.length} model(s)
+            {selectedDatasets.length} dataset(s)
           </span>
           <a className="wf-oval ml-auto" href="#/results">
             Go to Results
@@ -370,16 +394,36 @@ function ModelParamsEditor({ model, value, onChange }) {
         set(k, "");
         return;
       }
-      set(k, Number(raw));
-    },
-  });
+    
+      // Otherwise parse normally
+      const num = Number(raw);
+      set(k, num);
+
+    }
+    
+  });  
 
   return (
     <form onSubmit={handleSubmit((data) => console.log(data))}>
       <div className="form-grid">
         {Object.keys(rules).map((param) => (
           <Field key={param} label={param}>
-            <input className="input" type="number" step="any" {...numProps(param)} />
+            <input
+              className="input"
+              type="number"
+              step="any"
+              {...numProps(param)}
+              style={{
+                border: value[param] === "" || value[param] < rules[param].min.value ||
+                        (rules[param].max && value[param] > rules[param].max.value)
+                        ? "1.5px solid red"
+                        : undefined,
+                backgroundColor: value[param] === "" || value[param] < rules[param].min.value ||
+                                 (rules[param].max && value[param] > rules[param].max.value)
+                                 ? "#ffe6e6"
+                                 : undefined
+              }}
+            />
             {errors[param] && (
               <span className="error-message">{errors[param].message}</span>
             )}
