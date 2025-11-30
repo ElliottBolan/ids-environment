@@ -1,5 +1,5 @@
 // src/utils/HyParamRules.jsx
-// default hyperparameter rrules
+// default hyperparameter rules
 
 export const HyParamRules = {
   XGBoost: {

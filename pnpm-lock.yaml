@@ -17,6 +17,9 @@ dependencies:
   '@testing-library/user-event':
     specifier: ^13.5.0
     version: 13.5.0(@testing-library/dom@10.4.1)
+  cors:
+    specifier: ^2.8.5
+    version: 2.8.5
   lucide-react:
     specifier: ^0.553.0
     version: 0.553.0(react@19.2.0)
@@ -27,8 +30,8 @@ dependencies:
     specifier: ^19.2.0
     version: 19.2.0(react@19.2.0)
   react-hook-form:
-    specifier: ^7.66.1
-    version: 7.66.1(react@19.2.0)
+    specifier: ^7.67.0
+    version: 7.67.0(react@19.2.0)
   react-hot-toast:
     specifier: ^2.6.0
     version: 2.6.0(react-dom@19.2.0)(react@19.2.0)
@@ -3970,6 +3973,14 @@ packages:
 
   /core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
+    dev: false
+
+  /cors@2.8.5:
+    resolution: {integrity: sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g==}
+    engines: {node: '>= 0.10'}
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
     dev: false
 
   /cosmiconfig@6.0.0:
@@ -8854,8 +8865,8 @@ packages:
     resolution: {integrity: sha512-SN/U6Ytxf1QGkw/9ve5Y+NxBbZM6Ht95tuXNMKs8EJyFa/Vy/+Co3stop3KBHARfn/giv+Lj1uUnTfOJ3moFEQ==}
     dev: false
 
-  /react-hook-form@7.66.1(react@19.2.0):
-    resolution: {integrity: sha512-2KnjpgG2Rhbi+CIiIBQQ9Df6sMGH5ExNyFl4Hw9qO7pIqMBR8Bvu9RQyjl3JM4vehzCh9soiNUM/xYMswb2EiA==}
+  /react-hook-form@7.67.0(react@19.2.0):
+    resolution: {integrity: sha512-E55EOwKJHHIT/I6J9DmQbCWToAYSw9nN5R57MZw9rMtjh+YQreMDxRLfdjfxQbiJ3/qbg3Z02wGzBX4M+5fMtQ==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19

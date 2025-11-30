@@ -106,7 +106,7 @@ export default function App() {
       {showHeader && (
         <header className="shell-header">
           <div className="container shell-header__inner">
-            <a href="#/" className="brand-pill">IDS Trainer</a>
+            <a href="#/home" className="brand-pill">IDS Trainer</a>
             <nav className="toolbar">
               <a className="btn" href="#/train">Train</a>
               <a className="btn" href="#/results">Results</a>

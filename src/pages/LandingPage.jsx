@@ -1,5 +1,5 @@
-import React from "react";
-import Scripts from "./Scripts"
+import React, { useEffect, useRef, useState } from "react";
+import Scripts from "./Scripts";
 import toast from "react-hot-toast";
 
 export default function LandingPage() {
@@ -8,7 +8,7 @@ export default function LandingPage() {
 
     // Simulate checking model status
     setTimeout(() => {
-      const modelRunning = true;  
+      const modelRunning = true;
 
       if (modelRunning) {
         toast.success("Model is currently running!", { id: "model" });
@@ -34,10 +34,11 @@ export default function LandingPage() {
         <h1 className="hero-title">
           Changing the future of Internet Safety, one step at a time.
         </h1>
-        <p className="hero-subtitle">
-          Streamline your experiments with ease.
-        </p>
-        <button className="btn btn-lg mt-12" onClick={() => window.location.hash = "#/home"}>
+        <p className="hero-subtitle">Streamline your experiments with ease.</p>
+        <button
+          className="btn btn-lg mt-12"
+          onClick={() => (window.location.hash = "#/home")}
+        >
           Begin
         </button>
       </div>

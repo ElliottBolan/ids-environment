@@ -51,7 +51,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Card: View Results */}
             <div className="card card--action card--accent hover:shadow-xl transition-transform transform hover:-translate-y-1 bg-white rounded-2xl p-6 border border-gray-200">
               <div className="flex flex-col items-center space-y-4">
                 <BarChart3 size={40} className="text-green-600" />

@@ -1,4 +1,4 @@
-// src/pages/Train.jsx 
+// src/pages/Train.jsx
 import React, { useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { API_BASE } from "../api";
@@ -6,6 +6,9 @@ import { useForm } from "react-hook-form";
 import { HyParamRules } from "./HyParamRules";
 import { TableProperties } from "lucide-react";
 
+const STORAGE_KEY = "ids-runs-simple";
+
+//models in LCCDE
 const MODELS = ["LightGBM", "XGBoost", "CatBoost"];
 
 // Default hyperparameters
@@ -14,7 +17,7 @@ const DEFAULT_HP = {
     n_estimators: 500,
     num_leaves: 31,
     learning_rate: 0.1,
-    max_depth: -1,
+    max_depth: 1,
   },
   XGBoost: {
     n_estimators: 400,
@@ -61,14 +64,10 @@ export default function Train() {
   // toggle helper
   const toggle = (arr, setArr, value) =>
     setArr(
-      arr.includes(value)
-        ? arr.filter((v) => v !== value)
-        : [...arr, value]
+      arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value]
     );
 
-
-  
-    // Enable Run only when at least one dataset is chosen 
+  // Enable Run only when at least one dataset is chosen
   const canRun = selectedDatasets.length > 0;
 
   // Reset hyperparameters
@@ -98,105 +97,103 @@ export default function Train() {
 
   // Run model
   const runNow = async () => {
-  if (!canRun || !allValid) {
-    toast.error("Please select datasets and fix invalid fields.");
-    return;
-  }
+    if (!canRun || !allValid) {
+      toast.error("Please select datasets and fix invalid fields.");
+      return;
+    }
 
-  toast.loading("Running model...", { id: "run-status" });
+    toast.loading("Running model...", { id: "run-status" });
 
-  const results = [];
+    const results = [];
 
-  for (const ds of selectedDatasets) {
-    try {
-      const body = {
-        dataset: ds,
-        lgb_params: paramsByModel.LightGBM,
-        xgb_params: paramsByModel.XGBoost,
-        cbt_params: paramsByModel.CatBoost
-      };
+    for (const ds of selectedDatasets) {
+      try {
+        const body = {
+          dataset: ds,
+          lgb_params: paramsByModel.LightGBM,
+          xgb_params: paramsByModel.XGBoost,
+          cbt_params: paramsByModel.CatBoost,
+        };
 
-      console.log("Sending to backend:", body);
+        console.log("Sending to backend:", body);
 
-      const res = await fetch(`${API_BASE}/train_lccde`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+        const res = await fetch(`${API_BASE}/train_lccde`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
 
-      const data = await res.json();
-      console.log("Backend returned:", data);
+        const data = await res.json();
+        console.log("Backend returned:", data);
 
-      if (data.error) {
+        if (data.error) {
+          results.push({
+            dataset: ds,
+            model: "LCCDE",
+            metrics: { error: data.error },
+          });
+          toast.error(`Error running ${ds}: ${data.error}`);
+          continue;
+        }
+
+        // Build frontend run record
+        const runRecord = {
+          id: Date.now() + Math.random(),
+          dataset: ds,
+          model: "LCCDE",
+          metrics: {
+            accuracy: data.lccde.accuracy,
+            precision: data.lccde.precision,
+            recall: data.lccde.recall,
+            f1: data.lccde.f1_weighted,
+          },
+          duration_s: data.duration_s,
+          params: body,
+        };
+
+        // push locally for Session Results UI
+        results.push(runRecord);
+
+        // ---- SAVE TO DATABASE ----
+        try {
+          const saveRes = await fetch(`${API_BASE}/api/experiments`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model_name: "LCCDE",
+              params: body,
+              results: {
+                accuracy: data.lccde.accuracy,
+                precision: data.lccde.precision,
+                recall: data.lccde.recall,
+                f1: data.lccde.f1_weighted,
+              },
+              duration_s: data.duration_s,
+            }),
+          });
+
+          const saved = await saveRes.json();
+          console.log("Saved to database:", saved);
+        } catch (dbErr) {
+          console.error("Database save failed:", dbErr);
+          toast.error("Failed to save to database.");
+        }
+
+        toast.success(`Finished training on ${ds}!`);
+      } catch (err) {
+        console.error("Training failed:", err);
         results.push({
           dataset: ds,
           model: "LCCDE",
-          metrics: { error: data.error }
+          metrics: { error: err.message },
         });
-        toast.error(`Error running ${ds}: ${data.error}`);
-        continue;
+        toast.error(`Training failed on ${ds}: ${err.message}`);
       }
-
-      // Build frontend run record
-      const runRecord = {
-        id: Date.now() + Math.random(),
-        dataset: ds,
-        model: "LCCDE",
-        metrics: {
-          accuracy: data.lccde.accuracy,
-          precision: data.lccde.precision,
-          recall: data.lccde.recall,
-          f1: data.lccde.f1_weighted
-        },
-        duration_s: data.duration_s,
-        params: body
-      };
-
-      // push locally for Session Results UI
-      results.push(runRecord);
-
-      // ---- SAVE TO DATABASE ----
-      try {
-        const saveRes = await fetch(`${API_BASE}/api/experiments`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model_name: "LCCDE",
-            params: body,
-            results: {
-              accuracy: data.lccde.accuracy,
-              precision: data.lccde.precision,
-              recall: data.lccde.recall,
-              f1: data.lccde.f1_weighted
-            },
-            duration_s: data.duration_s
-          })
-        });
-
-        const saved = await saveRes.json();
-        console.log("Saved to database:", saved);
-      } catch (dbErr) {
-        console.error("Database save failed:", dbErr);
-        toast.error("Failed to save to database.");
-      }
-
-      toast.success(`Finished training on ${ds}!`);
-
-    } catch (err) {
-      console.error("Training failed:", err);
-      results.push({
-        dataset: ds,
-        model: "LCCDE",
-        metrics: { error: err.message }
-      });
-      toast.error(`Training failed on ${ds}: ${err.message}`);
     }
-  }
 
-  setSessionRuns(results);
-  toast.success("All tasks completed!", { id: "run-status" });
-};
-
+    setSessionRuns(results);
+    toast.success("All tasks completed!", { id: "run-status" });
+  };
 
   return (
     <>
@@ -307,9 +304,7 @@ export default function Train() {
           >
             Run Model
           </button>
-          <span className="muted">
-            {selectedDatasets.length} dataset(s)
-          </span>
+          <span className="muted">{selectedDatasets.length} dataset(s)</span>
           <a className="wf-oval ml-auto" href="#/results">
             Go to Results
           </a>
@@ -389,14 +384,12 @@ function ModelParamsEditor({ model, value, onChange }) {
         set(k, "");
         return;
       }
-    
+
       // Otherwise parse normally
       const num = Number(raw);
       set(k, num);
-
-    }
-    
-  });  
+    },
+  });
 
   return (
     <form onSubmit={handleSubmit((data) => console.log(data))}>
@@ -409,14 +402,18 @@ function ModelParamsEditor({ model, value, onChange }) {
               step="any"
               {...numProps(param)}
               style={{
-                border: value[param] === "" || value[param] < rules[param].min.value ||
-                        (rules[param].max && value[param] > rules[param].max.value)
-                        ? "1.5px solid red"
-                        : undefined,
-                backgroundColor: value[param] === "" || value[param] < rules[param].min.value ||
-                                 (rules[param].max && value[param] > rules[param].max.value)
-                                 ? "#ffe6e6"
-                                 : undefined
+                border:
+                  value[param] === "" ||
+                  value[param] < rules[param].min.value ||
+                  (rules[param].max && value[param] > rules[param].max.value)
+                    ? "1.5px solid red"
+                    : undefined,
+                backgroundColor:
+                  value[param] === "" ||
+                  value[param] < rules[param].min.value ||
+                  (rules[param].max && value[param] > rules[param].max.value)
+                    ? "#ffe6e6"
+                    : undefined,
               }}
             />
             {errors[param] && (
