@@ -184,18 +184,19 @@ def add_experiment():
 
         model_name  = data.get("model_name")
         params      = data.get("params")
-        results     = data.get("results")
+        raw_results = data.get("results")
+        normalized = ModelRun.normalize_metrics(raw_results)
         duration_s  = data.get("duration_s")
 
         # Basic validation
-        if not model_name or not params or not results:
+        if not model_name or not params or not normalized:
             return jsonify({"error": "Missing required fields"}), 400
 
         # Create a new run using ModelRun
         new_run = ModelRun.create_run(
             model_name=model_name,
             params=params,
-            results=results,
+            results=normalized,
             duration_s=duration_s
         )
 

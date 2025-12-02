@@ -1,5 +1,5 @@
 // src/pages/Compare.jsx
-// Compares 2 previous runs selected from the database in a list
+// Compares 2 previous runs stored in the database, styled to match the LCCDE UI
 
 import React, { useEffect, useState } from "react";
 import { API_BASE } from "../api";
@@ -14,7 +14,7 @@ export default function Compare() {
       try {
         const res = await fetch(`${API_BASE}/api/experiments`);
         const data = await res.json();
-        setExperiments(data);
+        setExperiments(data.results || []);
       } catch (err) {
         console.error("Failed to load experiments:", err);
       }
@@ -31,22 +31,31 @@ export default function Compare() {
     });
   };
 
-  if (loading) return <div className="p-6 text-white">Loading...</div>;
+  if (loading)
+    return <div className="muted" style={{ marginTop: 40 }}>Loading…</div>;
 
   const runA = experiments.find((e) => e.id === selected[0]) || null;
   const runB = experiments.find((e) => e.id === selected[1]) || null;
 
   return (
-    <div className="page">
-      <div className="page-center">
+    <div className="container" style={{ marginTop: 40 }}>
+      <h1 className="section__title" style={{ fontSize: 28, marginBottom: 20 }}>
+        Compare Experiments
+      </h1>
 
-        <h1 className="text-3xl font-bold mb-6">Compare Experiments</h1>
+      {/* Experiment List */}
+      <div className="section card" style={{ textAlign: "left" }}>
+        <h2 className="section__title">Select Two Experiments</h2>
+        <div className="section__hint">
+          Pick exactly two to compare side-by-side
+        </div>
 
-        <div className="space-y-3 mb-10">
+        <div className="grid" style={{ marginTop: 12 }}>
           {experiments.map((exp) => (
-            <div
+            <label
               key={exp.id}
-              className="flex items-center p-3 bg-gray-900 rounded-xl border border-gray-700"
+              className="card checkbox-row"
+              style={{ padding: 12 }}
             >
               <input
                 type="checkbox"
@@ -55,90 +64,94 @@ export default function Compare() {
                   !selected.includes(exp.id) && selected.length === 2
                 }
                 onChange={() => toggleSelect(exp.id)}
-                className="mr-3 h-5 w-5"
               />
-
               <div>
                 <div className="font-semibold">
-                  {exp.dataset} — {exp.model_name}
+                  {exp.params?.dataset} — {exp.model_name}
                 </div>
-                <div className="text-gray-400 text-sm">
-                  {new Date(exp.finishedAt).toLocaleString()}
+                <div className="muted" style={{ fontSize: 12 }}>
+                  {new Date(exp.created_at).toLocaleString()}
                 </div>
               </div>
-            </div>
+            </label>
           ))}
         </div>
+      </div>
 
-        {selected.length === 2 && (
-          <div className="mt-10">
+      {/* Comparison Display */}
+      {selected.length === 2 && (
+        <div className="section">
+          <h2 className="section__title" style={{ marginBottom: 16 }}>
+            Side-by-Side Comparison
+          </h2>
 
-            <h2 className="text-2xl font-bold mb-4">Side-by-Side Comparison</h2>
+          {/* Run cards */}
+          <div className="grid" style={{ marginBottom: 20 }}>
+            <RunCard title="Run A" run={runA} />
+            <RunCard title="Run B" run={runB} />
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-              <RunCard title="Run A" run={runA} />
-              <RunCard title="Run B" run={runB} />
-            </div>
-
-            <h3 className="text-xl font-semibold mb-3">Metrics</h3>
-            <table className="min-w-full bg-gray-900 rounded-xl mb-10">
+          {/* Metrics Table */}
+          <div className="card table-wrap">
+            <h3 className="section__title" style={{ marginBottom: 12 }}>
+              Metrics
+            </h3>
+            <table className="table">
               <thead>
-                <tr className="text-left border-b border-gray-700">
-                  <th className="p-3">Metric</th>
-                  <th className="p-3">Run A</th>
-                  <th className="p-3">Run B</th>
+                <tr>
+                  <th>Metric</th>
+                  <th>Run A</th>
+                  <th>Run B</th>
                 </tr>
               </thead>
               <tbody>
-                {metricRow("Accuracy", runA.metrics?.accuracy, runB.metrics?.accuracy)}
-                {metricRow("Precision", runA.metrics?.precision, runB.metrics?.precision)}
-                {metricRow("Recall", runA.metrics?.recall, runB.metrics?.recall)}
-                {metricRow("F1", runA.metrics?.f1, runB.metrics?.f1)}
+                {metricRow("Accuracy", runA.results?.accuracy, runB.results?.accuracy)}
+                {metricRow("Precision", runA.results?.precision, runB.results?.precision)}
+                {metricRow("Recall", runA.results?.recall, runB.results?.recall)}
+                {metricRow("F1", runA.results?.f1, runB.results?.f1)}
               </tbody>
             </table>
-
-            <h3 className="text-xl font-semibold mb-3">Hyperparameters</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <pre className="bg-gray-900 p-4 rounded-xl whitespace-pre-wrap">
-                {JSON.stringify(runA.hyperparams, null, 2)}
-              </pre>
-              <pre className="bg-gray-900 p-4 rounded-xl whitespace-pre-wrap">
-                {JSON.stringify(runB.hyperparams, null, 2)}
-              </pre>
-            </div>
-
           </div>
-        )}
 
-      </div>
+          {/* Hyperparameters */}
+          <div className="card" style={{ marginTop: 20 }}>
+            <h3 className="section__title" style={{ marginBottom: 12 }}>
+              Hyperparameters
+            </h3>
+
+            <div className="grid">
+              <pre className="textarea">{JSON.stringify(runA.params, null, 2)}</pre>
+              <pre className="textarea">{JSON.stringify(runB.params, null, 2)}</pre>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
+/* --- Subcomponents --- */
+
 function RunCard({ title, run }) {
   return (
-    <div className="bg-gray-900 p-6 rounded-xl border border-gray-700">
-      <h3 className="text-xl font-semibold mb-3">{title}</h3>
-      <div className="text-gray-300">
-        Dataset: <span className="text-white">{run.dataset}</span>
-      </div>
-      <div className="text-gray-300">
-        Model: <span className="text-white">{run.model_name}</span>
-      </div>
-      <div className="text-gray-300">
-        Finished:{" "}
-        <span className="text-white">
-          {new Date(run.finishedAt).toLocaleString()}
-        </span>
-      </div>
+    <div className="card" style={{ textAlign: "left" }}>
+      <h3 className="section__title" style={{ marginBottom: 8 }}>{title}</h3>
+      <div className="muted">Dataset:</div>
+      <div>{run.params?.dataset}</div>
+
+      <div className="muted" style={{ marginTop: 8 }}>Model:</div>
+      <div>{run.model_name}</div>
+
+      <div className="muted" style={{ marginTop: 8 }}>Created:</div>
+      <div>{new Date(run.created_at).toLocaleString()}</div>
     </div>
   );
 }
 
 function metricRow(label, a, b) {
   return (
-    <tr className="border-b border-gray-800" key={label}>
-      <td className="p-3 font-semibold">{label}</td>
+    <tr key={label}>
+      <td className="p-3">{label}</td>
       <td className="p-3">{a ?? "—"}</td>
       <td className="p-3">{b ?? "—"}</td>
     </tr>
