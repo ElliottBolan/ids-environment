@@ -506,3 +506,10 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
   width: 160px;         /* identical width for Run and Go (tighter) */
   white-space: nowrap;  /* prevent unintended wrapping */
 }
+
+.clickable-row {
+  cursor: pointer;
+}
+.clickable-row:hover {
+  background: #f5f5f5;
+}

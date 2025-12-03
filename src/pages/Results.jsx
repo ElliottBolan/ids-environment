@@ -1,283 +1,257 @@
-// src/pages/Results.jsx 
-// Results browser backed by localStorage: list, select, export CSV, delete all.
+// src/pages/Results.jsx
+// Backend-only results browser with trend line visualization (Option 2)
 
-import React, { useEffect, useMemo, useState } from "react";
-import { PreviousRuns } from "./Compare.jsx";
+import React, { useEffect, useState, useRef } from "react";
 import { API_BASE } from "../api";
-const STORAGE_KEY = "ids-runs-simple";
 
 
 export default function Results() {
-  const [runs, setRuns] = useState(() => readRuns());
-  // Selected rows map: { [id]: true } (legacy table)
-  const [selected, setSelected] = useState({});
-  const selectedRows = useMemo(() => runs.filter(r => selected[r.id]), [runs, selected]);
-   // Session comparison selections (limit to two sessions)
-   const [selectedSessions, setSelectedSessions] = useState([]);
-   const [compareSessions, setCompareSessions] = useState([]);
-  // Wireframe: simple tab state to preview the latest run per model
-  const MODELS = ["LightGBM","XGBoost","CatBoost"];
-  const [activeModel, setActiveModel] = useState(MODELS[1]);
-  // Show/hide legacy Results blocks below the wireframe
-  const SHOW_LEGACY = false;
+  const [experiments, setExperiments] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const latestForModel = (m) => runs
-    .filter(r => r.model === m)
-    .slice()
-    .sort((a,b) => b.finishedAt - a.finishedAt)[0];
-  const activeRun = latestForModel(activeModel);
+  const MODELS = ["LightGBM", "XGBoost", "CatBoost", "LCCDE"];
+  const [activeModel, setActiveModel] = useState("LCCDE");
 
-  // Pick the model with the highest accuracy among latest-per-model runs
-  const selectBestByAccuracy = () => {
-    const latest = MODELS.map(m => latestForModel(m)).filter(Boolean);
-    if (!latest.length) return;
-    const best = latest.reduce((a, b) => ((a?.metrics?.accuracy ?? -Infinity) >= (b?.metrics?.accuracy ?? -Infinity) ? a : b));
-    if (best?.model) setActiveModel(best.model);
-  };
+  const [model, setModel] = useState("");
+  const [runId, setRunId] = useState("");
+  const [startDate, setStartDate] = useState("");
 
-  const refresh = () => setRuns(readRuns());
-  const clearAll = () => {
-    if (window.confirm("Delete all saved runs?")) {
-      localStorage.removeItem(STORAGE_KEY);
-      setRuns([]); setSelected({});
-      setSelectedSessions([]); setCompareSessions([]);
-    }
-  };
-  const toggle = (id) => setSelected(prev => ({ ...prev, [id]: !prev[id] }));
-  const toggleSessionPick = (session) => {
-    setSelectedSessions(prev => {
-      if (prev.includes(session)) return prev.filter(s => s !== session);
-      if (prev.length >= 2) return prev; // at most two selections
-      return [...prev, session];
-    });
-  };
-  const runSessionCompare = () => {
-    if (selectedSessions.length === 2) setCompareSessions(selectedSessions);
-  };
+  const [datasets, setDatasets] = useState([]);
+  const [dataset, setDataset] = useState("");
 
-  const downloadCSV = () => {
-    // Export selected rows, or everything if none selected
-    const rows = selectedRows.length ? selectedRows : runs;
-    const headers = ["id","session","dataset","model","accuracy","precision","recall","f1","finishedAt","hyperparams"];
-    const mapped = rows.map(r => ({
-      id: r.id,
-      session: r.session,
-      dataset: r.dataset,
-      model: r.model,
-      accuracy: r.metrics?.accuracy,
-      precision: r.metrics?.precision,
-      recall: r.metrics?.recall,
-      f1: r.metrics?.f1,
-      finishedAt: new Date(r.finishedAt).toLocaleString(),
-      hyperparams: JSON.stringify(r.hyperparams ?? {}),
-    }));
-    const csv = toCSV(mapped, headers);
-    downloadText("ids_runs.csv", csv, "text/csv");
-  };
+  const [selectedRun, setSelectedRun] = useState(null);
 
-  // On first load, if runs exist, auto-select the model with best accuracy
   useEffect(() => {
-    if (runs && runs.length) selectBestByAccuracy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function load() {
+      try {
+        const res = await fetch(`${API_BASE}/api/experiments`);
+        const data = await res.json();
+        setExperiments(data.results || []);
+      } catch (err) {
+        console.error("Failed to load experiments:", err);
+      }
+      setLoading(false);
+    }
+
+    async function loadDatasets() {
+      try {
+        const res = await fetch(`${API_BASE}/api/datasets`);
+        const data = await res.json();
+        setDatasets(data.datasets || []);
+      } catch (err) {
+        console.error("Failed to load datasets:", err);
+      }
+    }
+
+    load();
+    loadDatasets();
   }, []);
+
+  // Runs for the active model
+  const view = experiments.filter((e) => e.model_name === activeModel);
+
+  const latest = view[0];
+  const activeRun = selectedRun || latest;
+
+  const applyFilters = async () => {
+    const params = new URLSearchParams();
+    if (model) params.append("model", model);
+    if (runId) params.append("run_id", runId);
+    if (startDate) params.append("start_date", startDate);
+    if (dataset) params.append("dataset", dataset);
+
+    const res = await fetch(`${API_BASE}/api/experiments?${params.toString()}`);
+    const data = await res.json();
+    setExperiments(data.results || []);
+  };
 
   return (
     <>
-      {/* Wireframe-style header and model display */}
+      {/* HEADER */}
       <section className="wf-shell">
         <div className="wf-topbar">
-          <a className="wf-back" href="#/train">← Go back</a>
-          <h1 className="wf-title">LCCDE Model Display</h1>
+          <a className="wf-back" href="#/train">
+            ← Go back
+          </a>
+          <h1 className="wf-title">LCCDE Model Results</h1>
         </div>
 
+        {/* MODEL TABS */}
         <div className="wf-tabs">
-          {MODELS.map(m => (
+          {MODELS.map((m) => (
             <button
               key={m}
-              className={`wf-tab ${activeModel === m ? 'is-active' : ''}`}
-              onClick={() => setActiveModel(m)}
-            >{m}</button>
+              className={`wf-tab ${activeModel === m ? "is-active" : ""}`}
+              onClick={() => {
+                setActiveModel(m);
+                setSelectedRun(null);
+              }}
+            >
+              {m}
+            </button>
           ))}
         </div>
 
+        {/* MAIN PANEL */}
         <div className="wf-content">
-          <div className="wf-heatmap">
-            {/* Placeholder image area; swap to real confusion matrix when available */}
-            <div className="wf-heatmap__placeholder">Confusion Matrix</div>
-            <div className="wf-times muted">
-              Cpu time(total): 18.1 s · Wall time: 11.7 s
-            </div>
-          </div>
+          {!activeRun ? (
+            <div className="muted p-4">No runs found for {activeModel}.</div>
+          ) : (
+            <>
+              {/* <div style={{ width: "360px" }}>
+                <MetricTrendChart runs={view} />
+              </div> */}
 
-          <div className="wf-metrics">
-            <div><span className="wf-metric__label">Accuracy:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.accuracy)}</span></div>
-            <div><span className="wf-metric__label">Precision:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.precision)}</span></div>
-            <div><span className="wf-metric__label">Recall:</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.recall)}</span></div>
-            <div><span className="wf-metric__label">F1 :</span> <span className="wf-metric__val">{fmt(activeRun?.metrics?.f1)}</span></div>
-          </div>
-            <button
-              className="btn btn-lg"
-              onClick={() => (window.location.hash = "#/compare")}
-            >
-              Compare Previous Runs
-            </button>
+              <div className="wf-times muted">
+                Duration: {activeRun?.duration_s ?? "—"} s
+              </div>
+
+              {/* Metrics Panel */}
+              <div className="wf-metrics">
+                {metricLine("Accuracy", activeRun.results?.accuracy)}
+                {metricLine("Precision", activeRun.results?.precision)}
+                {metricLine("Recall", activeRun.results?.recall)}
+                {metricLine("F1", activeRun.results?.f1)}
+              </div>
+
+              <button
+                className="btn btn-lg"
+                onClick={() => (window.location.hash = "#/compare")}
+              >
+                Compare Previous Runs
+              </button>
+            </>
+          )}
         </div>
       </section>
 
-      {/* Session History: show all sessions in reverse order (latest first) */}
-      {(() => {
-        const withSession = runs.filter(r => Number.isFinite(r.session));
-        if (!withSession.length) return null;
-        const sessionsDesc = Array.from(new Set(withSession.map(r => r.session))).sort((a,b) => b - a);
-        return (
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">Session Results</h2>
-              <div className="section__hint">{withSession.length} total runs · {sessionsDesc.length} sessions</div>
-            </div>
-            {sessionsDesc.map(s => {
-              const sruns = withSession.filter(r => r.session === s).slice().sort((a,b) => (b.finishedAt ?? 0) - (a.finishedAt ?? 0));
-              return (
-                <div key={s} className="section" style={{ marginBottom: 12 }}>
-                  <div className="section__head">
-                    <h3 className="section__title">Session #{s}</h3>
-                    <div className="section__hint">{sruns.length} completed</div>
-                  </div>
-                  <div className="grid grid-runs">
-                    {sruns.map(r => {
-                      const dur = typeof r.durationMs === 'number' ? r.durationMs : (r.finishedAt && r.startedAt ? (r.finishedAt - r.startedAt) : null);
-                      const secs = dur != null ? (dur / 1000).toFixed(1) + ' s' : '—';
-                      return (
-                        <div key={r.id} className="card run-card">
-                          <div style={{ fontWeight: 700, marginBottom: 6 }}>{r.dataset} — {r.model}</div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                            <div><span className="label">Accuracy</span><div>{r.metrics?.accuracy}</div></div>
-                            <div><span className="label">Precision</span><div>{r.metrics?.precision}</div></div>
-                            <div><span className="label">Recall</span><div>{r.metrics?.recall}</div></div>
-                            <div><span className="label">F1</span><div>{r.metrics?.f1}</div></div>
-                          </div>
-                          <div className="muted" style={{ marginTop: 8 }}>Time: {secs} · Finished: {new Date(r.finishedAt).toLocaleTimeString()}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        );
-      })()}
+      {/* FILTER PANEL */}
+      <div className="card mb-12" style={{ padding: 16 }}>
+        <h3 style={{ marginBottom: 12 }}>Filter Results</h3>
 
-      {SHOW_LEGACY && (
-        <>
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">Results</h2>
-              <div className="section__hint">{runs.length} total</div>
-            </div>
-            <div className="card toolbar">
-              <button className="btn" onClick={refresh}>Refresh</button>
-              <button className="btn" onClick={downloadCSV}>Download CSV</button>
-              <button className="btn" onClick={clearAll}>Delete All</button>
-            </div>
-          </section>
+        <div className="form-grid">
+          <div className="field">
+            <label className="label">Model</label>
+            <select
+              className="input"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+            >
+              <option value="">All Models</option>
+              <option value="LCCDE">LCCDE</option>
+              <option value="XGBoost">XGBoost</option>
+              <option value="CatBoost">CatBoost</option>
+              <option value="LightGBM">LightGBM</option>
+            </select>
+          </div>
 
-          {selectedRows.length >= 1 && (
-            <section className="section">
-              <div className="section__head">
-                <h2 className="section__title">Hyperparameters</h2>
-                <div className="section__hint">{selectedRows.length} selected</div>
-              </div>
-              <div className="card" style={{ display: "grid", gap: 12 }}>
-                {selectedRows.map(r => (
-                  <div key={r.id} className="card" style={{ padding: 12 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 6 }}>
-                      {r.dataset} — {r.model} <span className="muted">({new Date(r.finishedAt).toLocaleString()})</span>
-                    </div>
-                    <pre className="textarea" style={{ margin: 0 }}>
-{JSON.stringify(r.hyperparams ?? {}, null, 2)}
-                    </pre>
-                  </div>
+          <div className="field">
+            <label className="label">Dataset</label>
+            <select
+              className="input"
+              value={dataset}
+              onChange={(e) => setDataset(e.target.value)}
+            >
+              <option value="">All Datasets</option>
+              {datasets.map((d) => (
+                <option key={d} value={d}>
+                  {d.replace(".csv", "")}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <label className="label">Run ID</label>
+            <input
+              type="number"
+              className="input"
+              placeholder="e.g. 12"
+              value={runId}
+              onChange={(e) => setRunId(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label className="label">Start Date</label>
+            <input
+              type="date"
+              className="input"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <button className="btn mt-12" onClick={applyFilters}>
+          Apply Filters
+        </button>
+      </div>
+
+      {/* FULL EXPERIMENT TABLE */}
+      <section className="section">
+        <div className="section__head">
+          <h2 className="section__title">All Experiments</h2>
+          <div className="section__hint">{experiments.length} total</div>
+        </div>
+
+        <div className="card table-wrap">
+          {loading ? (
+            <div className="muted p-4">Loading...</div>
+          ) : experiments.length === 0 ? (
+            <div className="muted p-4">No experiments available.</div>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Dataset</th>
+                  <th>Model</th>
+                  <th>Accuracy</th>
+                  <th>Precision</th>
+                  <th>Recall</th>
+                  <th>F1</th>
+                  <th>Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                {experiments.map((exp) => (
+                  <tr
+                    key={exp.id}
+                    onClick={() => {
+                      setSelectedRun(exp);
+                      setActiveModel(exp.model_name);
+                    }}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <td>{exp.params?.dataset}</td>
+                    <td>{exp.model_name}</td>
+                    <td>{fmt(exp.results?.accuracy)}</td>
+                    <td>{fmt(exp.results?.precision)}</td>
+                    <td>{fmt(exp.results?.recall)}</td>
+                    <td>{fmt(exp.results?.f1)}</td>
+                    <td>{new Date(exp.created_at).toLocaleString()}</td>
+                  </tr>
                 ))}
-              </div>
-            </section>
+              </tbody>
+            </table>
           )}
-          
-          <section className="section">
-            <div className="section__head">
-              <h2 className="section__title">All Runs</h2>
-              <div className="section__hint">Newest first</div>
-            </div>
-            <div className="card table-wrap">
-              {runs.length === 0 ? (
-                <div className="muted">No runs yet. Run some experiments on the Train page.</div>
-              ) : (
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Pick</th>
-                      <th>Dataset</th>
-                      <th>Model</th>
-                      <th>Accuracy</th>
-                      <th>Precision</th>
-                      <th>Recall</th>
-                      <th>F1</th>
-                      <th>Finished</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runs.slice().sort((a,b) => b.finishedAt - a.finishedAt).map(r => (
-                      <tr key={r.id}>
-                        <td><input type="checkbox" checked={!!selected[r.id]} onChange={() => toggle(r.id)} /></td>
-                        <td>{r.dataset}</td>
-                        <td>{r.model}</td>
-                        <td>{r.metrics?.accuracy}</td>
-                        <td>{r.metrics?.precision}</td>
-                        <td>{r.metrics?.recall}</td>
-                        <td>{r.metrics?.f1}</td>
-                        <td>{new Date(r.finishedAt).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </section>
-        </>
-      )}
+        </div>
+      </section>
     </>
   );
 }
 
-// Format metric (0..1) to percentage with one decimal; dash if missing
-function fmt(v) {
-  if (typeof v !== "number" || Number.isNaN(v)) return "—";
-  return `${(v * 100).toFixed(1)}%`;
+/* ---------- Helpers ---------- */
+function metricLine(label, val) {
+  return (
+    <div>
+      <span className="wf-metric__label">{label}:</span>{" "}
+      <span className="wf-metric__val">{fmt(val)}</span>
+    </div>
+  );
 }
 
-function readRuns() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); }
-  catch { return []; }
-}
-function toCSV(rows, headers) {
-  // Minimal CSV with escaping for quotes/newlines/commas
-  const esc = (v) => {
-    if (v == null) return "";
-    const s = String(v);
-    // eslint-disable-next-line no-useless-escape
-    if (/[,"\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-    return s;
-  };
-  const head = headers.map(esc).join(",");
-  const body = rows.map(r => headers.map(h => esc(r[h])).join(",")).join("\n");
-  return head + "\n" + body;
-}
-function downloadText(filename, text, type = "text/plain") {
-  // Blob + temporary link to trigger a download
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
+function fmt(v) {
+  if (typeof v !== "number") return "—";
+  return (v * 100).toFixed(2) + "%";
 }
