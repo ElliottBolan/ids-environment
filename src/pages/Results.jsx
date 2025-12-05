@@ -9,7 +9,7 @@ export default function Results() {
   const [experiments, setExperiments] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const MODELS = ["LightGBM", "XGBoost", "CatBoost", "LCCDE"];
+  const [models, setModels] = useState(["LCCDE"]);
   const [activeModel, setActiveModel] = useState("LCCDE");
 
   const [model, setModel] = useState("");
@@ -33,6 +33,22 @@ export default function Results() {
       setLoading(false);
     }
 
+    async function loadModels() {
+      try {
+        const res = await fetch(`${API_BASE}/api/models`);
+        const data = await res.json();
+        const names = data.names || (data.models || []).map((m) => m.name);
+        if (names && names.length) {
+          setModels(names);
+          if (!names.includes(activeModel)) {
+            setActiveModel("LCCDE");
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load models:", err);
+      }
+    }
+
     async function loadDatasets() {
       try {
         const res = await fetch(`${API_BASE}/api/datasets`);
@@ -44,6 +60,7 @@ export default function Results() {
     }
 
     load();
+    loadModels();
     loadDatasets();
   }, []);
 
@@ -78,7 +95,7 @@ export default function Results() {
 
         {/* MODEL TABS */}
         <div className="wf-tabs">
-          {MODELS.map((m) => (
+          {models.map((m) => (
             <button
               key={m}
               className={`wf-tab ${activeModel === m ? "is-active" : ""}`}
@@ -138,10 +155,11 @@ export default function Results() {
               onChange={(e) => setModel(e.target.value)}
             >
               <option value="">All Models</option>
-              <option value="LCCDE">LCCDE</option>
-              <option value="XGBoost">XGBoost</option>
-              <option value="CatBoost">CatBoost</option>
-              <option value="LightGBM">LightGBM</option>
+              {models.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
           </div>
 

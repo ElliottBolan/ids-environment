@@ -1,3 +1,4 @@
+import json
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy # type: ignore
@@ -8,6 +9,7 @@ import os
 import time
 from models import db, ModelRun
 from utils.confusion_matrix import generate_confusion_matrix_image
+from utils.custom_models import list_models, register_model, run_model, find_model
 from validation import (
     validate_lgb_params,
     validate_xgb_params,
@@ -67,75 +69,100 @@ MODEL_PARAMETERS = {
     }
 }
 
-MOCK_EXPERIMENTS = [
-    {
-        "id": 1,
-        "model": "LCCDE",
-        "parameters": {"learning_rate": 0.01, "epochs": 10},
-        "accuracy": 0.94,
-        "date": "2025-10-20"
-    },
-    {
-        "id": 2,
-        "model": "LCCDE",
-        "parameters": {"learning_rate": 0.001, "epochs": 25},
-        "accuracy": 0.95,
-        "date": "2025-10-21"
-    }
-]
-
 # --- API ROUTES ---
 # List the available ML-based IDS models (just LCCDE for now)
 @app.route("/api/models", methods=["GET"])
 def get_models():
-    return jsonify({"models": AVAILABLE_MODELS})
+    custom = list_models()
+    names = [m.get("name") for m in custom]
+    return jsonify({
+        "models": [
+            {"name": "LCCDE", "type": "ensemble", "hyperparams": MODEL_PARAMETERS["LCCDE"]}
+        ] + custom,
+        "names": ["LCCDE"] + names
+    })
 
 # Get all the configurable parameters for the chosen model (again, just LCCDE for now)
 @app.route("/api/models/<model_name>/parameters", methods=["GET"])
 def get_model_parameters(model_name):
-    params = MODEL_PARAMETERS.get(model_name)
-    if not params:
+    if model_name == "LCCDE":
+        params = MODEL_PARAMETERS.get(model_name)
+        return jsonify({"model": model_name, "default_parameters": params})
+
+    custom = find_model(model_name)
+    if not custom:
         return jsonify({"error": "Model not found"}), 404
-    return jsonify({"model": model_name, "default_parameters": params})
+
+    return jsonify({
+        "model": custom.get("name"),
+        "default_parameters": custom.get("hyperparams", {})
+    })
+
+
+@app.route("/api/models/upload", methods=["POST"])
+def upload_model():
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "File is required"}), 400
+
+        file = request.files["file"]
+        name = request.form.get("name") or os.path.splitext(file.filename)[0]
+        hyper_raw = request.form.get("hyperparams")
+        hyperparams = json.loads(hyper_raw) if hyper_raw else {}
+
+        # Save upload to disk
+        from utils.custom_models import MODELS_DIR, _slugify
+
+        slug = _slugify(name)
+        dest_dir = MODELS_DIR / slug
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        source_path = dest_dir / file.filename
+        file.save(str(source_path))
+
+        meta = register_model(name, source_path, hyperparams)
+
+        return jsonify({"message": "Model uploaded", "model": meta})
+    except Exception as e:
+        print("Upload failed:", e)
+        return jsonify({"error": str(e)}), 400
+
+
+def execute_lccde(payload: dict):
+    dataset = payload.get("dataset", "CICIDS2017_sample_km.csv")
+    label_col = payload.get("label_col", "Label")
+    smote_strategy = payload.get("smote_strategy", {2:1000, 4:1000})
+    random_state = payload.get("random_state", 0)
+    test_size = payload.get("test_size", 0.2)
+    lgb_params = validate_lgb_params(payload.get("lgb_params"))
+    xgb_params = validate_xgb_params(payload.get("xgb_params"))
+    cbt_params = validate_cbt_params(payload.get("cbt_params"))
+
+    if isinstance(smote_strategy, dict):
+        smote_strategy = {int(k): v for k, v in smote_strategy.items()}
+
+    results = train_lccde_pipeline(
+        file_path=dataset,
+        label_col=label_col,
+        smote_strategy=smote_strategy,
+        random_state=random_state,
+        test_size=test_size,
+        lgb_params=lgb_params,
+        xgb_params=xgb_params,
+        cbt_params=cbt_params
+    )
+    return results
 
 
 @app.route("/train_lccde", methods=["POST"])
 def train_lccde():
     try:
-        # Extract parameters from the POST request body
-        params = request.get_json() or {}
-        # Default values if missing
-        dataset = params.get("dataset", "CICIDS2017_sample_km.csv")
-        label_col = params.get("label_col", "Label")
-        smote_strategy = params.get("smote_strategy", {2:1000, 4:1000})
-        random_state = params.get("random_state", 0)
-        test_size = params.get("test_size", 0.2)
-        lgb_params = validate_lgb_params(params.get("lgb_params"))
-        xgb_params = validate_xgb_params(params.get("xgb_params"))
-        cbt_params = validate_cbt_params(params.get("cbt_params"))
-
-        if isinstance(smote_strategy, dict):
-            smote_strategy = {int(k): v for k, v in smote_strategy.items()}
-
-        # Run the LCCDE pipeline
-        results = train_lccde_pipeline(
-            file_path=dataset,
-            label_col=label_col,
-            smote_strategy=smote_strategy,
-            random_state=random_state,
-            test_size=test_size,
-            lgb_params=lgb_params,
-            xgb_params=xgb_params,
-            cbt_params=cbt_params
-        )
-
-        # Return the performance metrics
+        payload = request.get_json() or {}
+        results = execute_lccde(payload)
         return jsonify(make_json_safe(results))
-
     except Exception as e:
         import traceback
         print("ERROR in /train_lccde:", e)
-        traceback.print_exc()  # full traceback in your terminal
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 400
 
 # Get a list of previous experiments
@@ -230,6 +257,59 @@ def get_experiment(run_id):
         return jsonify({"error": "Experiment not found"}), 404
 
     return jsonify(run.to_dict())
+
+
+@app.route("/train_model", methods=["POST"])
+def train_model():
+    try:
+        data = request.get_json() or {}
+        model_name = data.get("model_name", "LCCDE")
+        dataset = data.get("dataset", "CICIDS2017_sample_km.csv")
+
+        if model_name == "LCCDE":
+            results = execute_lccde(data)
+            payload_params = {
+                "dataset": dataset,
+                "lgb_params": data.get("lgb_params"),
+                "xgb_params": data.get("xgb_params"),
+                "cbt_params": data.get("cbt_params"),
+            }
+            run = ModelRun.create_run("LCCDE", payload_params, results.get("lccde"), results.get("duration_s"))
+            return jsonify({
+                "model": "LCCDE",
+                "metrics": make_json_safe(results.get("lccde", {})),
+                "duration_s": results.get("duration_s"),
+                "raw": make_json_safe(results),
+                "run_id": run.id,
+                "created_at": run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else None,
+            })
+
+        # Custom model execution
+        params = data.get("params") or {}
+        start = time.time()
+        raw_results = run_model(model_name, dataset, params)
+        duration_s = round(time.time() - start, 3)
+
+        normalized = ModelRun.normalize_metrics(raw_results)
+        if not normalized:
+            raise ValueError("Custom model must return metrics with accuracy/precision/recall/f1")
+
+        run = ModelRun.create_run(model_name, {"dataset": dataset, **params}, normalized, duration_s)
+
+        return jsonify({
+            "model": model_name,
+            "metrics": make_json_safe(normalized),
+            "duration_s": duration_s,
+            "raw": make_json_safe(raw_results),
+            "run_id": run.id,
+            "created_at": run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else None,
+        })
+
+    except Exception as e:
+        import traceback
+        print("ERROR in /train_model:", e)
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/datasets", methods=["GET"])
