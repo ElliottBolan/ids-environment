@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy # type: ignore
 from dotenv import load_dotenv # type: ignore
 from LCCDE import train_lccde_pipeline
-from sqlalchemy import cast, String
+from sqlalchemy import cast, func, String
 import os
 import time
 from models import db, ModelRun
@@ -157,9 +157,13 @@ def get_experiments():
             query = query.filter_by(model_name=model)
 
         # Dataset filter (JSON field)
+        #if dataset:
+            #query = query.filter(
+                #cast(ModelRun.params["dataset"], String) == dataset
+            #)
         if dataset:
             query = query.filter(
-                cast(ModelRun.params["dataset"], String) == dataset
+                func.JSON_UNQUOTE(func.JSON_EXTRACT(ModelRun.params, '$.dataset')) == dataset
             )
 
         # Run ID
