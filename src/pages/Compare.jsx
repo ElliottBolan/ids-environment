@@ -8,6 +8,7 @@ export default function Compare() {
   const [experiments, setExperiments] = useState([]);
   const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -21,7 +22,36 @@ export default function Compare() {
       setLoading(false);
     }
     load();
+
+    // poll running state for active training jobs
+    let mounted = true;
+    async function pollRunning() {
+      try {
+        const r = await fetch(`${API_BASE}/api/running`);
+        const j = await r.json();
+        if (!mounted) return;
+        setIsRunning(Boolean(j.running));
+      } catch (err) {
+        // ignore
+      }
+    }
+    pollRunning();
+    const iv = setInterval(pollRunning, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(iv);
+    };
   }, []);
+
+  async function refreshExperiments() {
+    try {
+      const res = await fetch(`${API_BASE}/api/experiments`);
+      const data = await res.json();
+      setExperiments(data.results || []);
+    } catch (err) {
+      console.error("Failed to refresh experiments:", err);
+    }
+  }
 
   const toggleSelect = (id) => {
     setSelected((prev) => {
@@ -39,9 +69,11 @@ export default function Compare() {
 
   return (
     <div className="container" style={{ marginTop: 40 }}>
-      <h1 className="section__title" style={{ fontSize: 28, marginBottom: 20 }}>
-        Compare Experiments
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <h1 className="section__title" style={{ fontSize: 28, marginBottom: 20 }}>
+          Compare Experiments
+        </h1>
+      </div>
 
       {/* Experiment List */}
       <div className="section card" style={{ textAlign: "left" }}>
@@ -87,8 +119,20 @@ export default function Compare() {
 
           {/* Run cards */}
           <div className="grid" style={{ marginBottom: 20 }}>
-            <RunCard title="Run A" run={runA} />
-            <RunCard title="Run B" run={runB} />
+            <RunCard title="Run A" run={runA} index={0} refreshExperiments={refreshExperiments} setSelected={setSelected} />
+            <RunCard title="Run B" run={runB} index={1} refreshExperiments={refreshExperiments} setSelected={setSelected} />
+          </div>
+
+          {/* Small bar charts for each run (Accuracy, Precision, Recall, F1) */}
+          <div className="grid" style={{ gap: 16, marginBottom: 20 }}>
+            <div className="card">
+              <h3 className="section__title" style={{ marginBottom: 8 }}>Run A Metrics</h3>
+              <BarChart metrics={runA?.results} labels={["accuracy", "precision", "recall", "f1"]} />
+            </div>
+            <div className="card">
+              <h3 className="section__title" style={{ marginBottom: 8 }}>Run B Metrics</h3>
+              <BarChart metrics={runB?.results} labels={["accuracy", "precision", "recall", "f1"]} />
+            </div>
           </div>
 
           {/* Metrics Table */}
@@ -96,7 +140,7 @@ export default function Compare() {
             <h3 className="section__title" style={{ marginBottom: 12 }}>
               Metrics
             </h3>
-            <table className="table">
+            <table className="table metrics-table">
               <thead>
                 <tr>
                   <th>Metric</th>
@@ -132,18 +176,46 @@ export default function Compare() {
 
 /* --- Subcomponents --- */
 
-function RunCard({ title, run }) {
+function RunCard({ title, run, index = 0, refreshExperiments, setSelected }) {
+  const handleRerun = async (e) => {
+    e && e.stopPropagation();
+    if (!run) return;
+    const params = Object.assign({}, run.params || {});
+    if (params.dataset) delete params.dataset;
+    const q = new URLSearchParams();
+    q.set("model", run.model_name);
+    q.set("dataset", run.params?.dataset || "");
+    try {
+      q.set("params", JSON.stringify(params));
+    } catch (err) {
+      q.set("params", "{}");
+    }
+    window.location.hash = `#/train?${q.toString()}`;
+  };
+
   return (
-    <div className="card" style={{ textAlign: "left" }}>
-      <h3 className="section__title" style={{ marginBottom: 8 }}>{title}</h3>
-      <div className="muted">Dataset:</div>
-      <div>{run.params?.dataset}</div>
+    <div className="card" style={{ textAlign: "left", position: "relative" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <h3 className="section__title" style={{ marginBottom: 8 }}>{title}</h3>
+        <div style={{ marginLeft: 12 }}>
+          <button className="btn" onClick={handleRerun}>Rerun</button>
+        </div>
+      </div>
 
-      <div className="muted" style={{ marginTop: 8 }}>Model:</div>
-      <div>{run.model_name}</div>
+      {!run ? (
+        <div className="muted">No run selected</div>
+      ) : (
+        <>
+          <div className="muted">Dataset:</div>
+          <div>{run.params?.dataset}</div>
 
-      <div className="muted" style={{ marginTop: 8 }}>Created:</div>
-      <div>{new Date(run.created_at).toLocaleString()}</div>
+          <div className="muted" style={{ marginTop: 8 }}>Model:</div>
+          <div>{run.model_name}</div>
+
+          <div className="muted" style={{ marginTop: 8 }}>Created:</div>
+          <div>{new Date(run.created_at).toLocaleString()}</div>
+        </>
+      )}
     </div>
   );
 }
@@ -155,5 +227,42 @@ function metricRow(label, a, b) {
       <td className="p-3">{a ?? "—"}</td>
       <td className="p-3">{b ?? "—"}</td>
     </tr>
+  );
+}
+
+function BarChart({ metrics = {}, labels = [] }) {
+  // metrics may be nested in different shapes; normalize to numeric 0..1
+  const getVal = (k) => {
+    const v = metrics?.[k] ?? metrics?.results?.[k] ?? null;
+    if (v == null) return 0;
+    const n = Number(v);
+    if (Number.isNaN(n)) return 0;
+    // If metric looks like a percentage (e.g., 95) convert to 0..1
+    if (n > 1) return Math.min(1, n / 100);
+    return Math.max(0, Math.min(1, n));
+  };
+
+  const rows = labels.map((label) => ({ label, value: getVal(label) }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {rows.map((r) => (
+        <div key={r.label} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 84, fontSize: 13, color: "#444" }}>{r.label}</div>
+          <div style={{ flex: 1, background: "#f1f1f1", height: 18, borderRadius: 6, overflow: "hidden" }}>
+            <div
+              style={{
+                width: `${Math.round(r.value * 100)}%`,
+                height: "100%",
+                background: `linear-gradient(90deg, #4f46e5, #06b6d4)`,
+              }}
+            />
+          </div>
+          <div style={{ width: 56, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+            {Math.round(r.value * 100)}%
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }

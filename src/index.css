@@ -106,6 +106,17 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
 .table th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); color: var(--muted); font-weight: 600; }
 .table td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; }
 
+/* Left-align text for metrics table cells specifically (Compare page) */
+.metrics-table td { text-align: left; }
+
+/* Left-align the All Experiments table cells and show a hover action button */
+.experiments-table td { text-align: left; }
+.experiments-table tr { position: relative; }
+.experiments-table td.actions { width: 80px; }
+.experiments-table .row-actions { opacity: 0; transition: opacity .12s ease; display: flex; align-items: center; justify-content: center; height: 100%; }
+.experiments-table tr:hover .row-actions { opacity: 1; }
+.experiments-table .row-actions .btn { padding: 6px 8px; font-size: 13px; }
+
 /* Fun accents */
 .brand-pill {
   background: #E8F7E0;
@@ -312,6 +323,24 @@ legend.hp { padding: 0 6px; color: var(--muted); font-size: 12px; }
 }
 .wf-oval:hover { background: #e3e7ee; transform: translateY(-1px); box-shadow: 0 8px 18px rgba(0,0,0,.08); }
 .wf-oval[disabled] { opacity: .55; cursor: not-allowed; box-shadow: none; transform: none; }
+
+/* Running bubble */
+.running-bubble {
+  background: #1f9d55;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 18px rgba(31,157,85,0.18);
+}
+.running-bubble::before {
+  content: '';
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #a6f3b4; display: inline-block; margin-right: 8px;
+}
 
 @media (max-width: 640px) {
   .wf-metrics { grid-template-columns: 1fr; min-width: unset; width: 100%; }

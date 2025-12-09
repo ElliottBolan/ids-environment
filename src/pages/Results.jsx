@@ -20,6 +20,7 @@ export default function Results() {
   const [dataset, setDataset] = useState("");
 
   const [selectedRun, setSelectedRun] = useState(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -62,6 +63,25 @@ export default function Results() {
     load();
     loadModels();
     loadDatasets();
+
+    // poll running state for any in-progress runs
+    let mounted = true;
+    async function pollRunning() {
+      try {
+        const r = await fetch(`${API_BASE}/api/running`);
+        const j = await r.json();
+        if (!mounted) return;
+        setIsRunning(Boolean(j.running));
+      } catch (err) {
+        // ignore
+      }
+    }
+    pollRunning();
+    const iv = setInterval(pollRunning, 3000);
+    return () => {
+      mounted = false;
+      clearInterval(iv);
+    };
   }, []);
 
   // Runs for the active model
@@ -219,9 +239,10 @@ export default function Results() {
           ) : experiments.length === 0 ? (
             <div className="muted p-4">No experiments available.</div>
           ) : (
-            <table className="table">
+            <table className="table experiments-table">
               <thead>
                 <tr>
+                  <th>ID</th>
                   <th>Dataset</th>
                   <th>Model</th>
                   <th>Accuracy</th>
@@ -229,6 +250,7 @@ export default function Results() {
                   <th>Recall</th>
                   <th>F1</th>
                   <th>Created</th>
+                  <th aria-hidden="true" style={{ width: 80 }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -241,6 +263,7 @@ export default function Results() {
                     }}
                     style={{ cursor: "pointer" }}
                   >
+                    <td>{exp.id}</td>
                     <td>{exp.params?.dataset}</td>
                     <td>{exp.model_name}</td>
                     <td>{fmt(exp.results?.accuracy)}</td>
@@ -248,6 +271,29 @@ export default function Results() {
                     <td>{fmt(exp.results?.recall)}</td>
                     <td>{fmt(exp.results?.f1)}</td>
                     <td>{new Date(exp.created_at).toLocaleString()}</td>
+                    <td className="actions">
+                      <div className="row-actions">
+                        <button
+                          className="btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const params = Object.assign({}, exp.params || {});
+                            if (params.dataset) delete params.dataset;
+                            const q = new URLSearchParams();
+                            q.set("model", exp.model_name);
+                            q.set("dataset", exp.params?.dataset || exp.dataset || "");
+                            try {
+                              q.set("params", JSON.stringify(params));
+                            } catch (err) {
+                              q.set("params", "{}");
+                            }
+                            window.location.hash = `#/train?${q.toString()}`;
+                          }}
+                        >
+                          Rerun
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

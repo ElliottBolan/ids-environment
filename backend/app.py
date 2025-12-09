@@ -9,12 +9,28 @@ import os
 import time
 from models import db, ModelRun
 from utils.confusion_matrix import generate_confusion_matrix_image
-from utils.custom_models import list_models, register_model, run_model, find_model
+from utils.custom_models import (
+    list_models,
+    register_model,
+    run_model,
+    find_model,
+    load_registry,
+    save_registry,
+    MODELS_DIR,
+    _slugify,
+)
 from validation import (
     validate_lgb_params,
     validate_xgb_params,
     validate_cbt_params
 )
+import threading
+
+# Simple global counter for running jobs (thread-safe)
+RUNNING_JOBS = 0
+RUNNING_LOCK = threading.Lock()
+# Global cancellation event for signalling long-running runs to stop
+CANCEL_EVENT = threading.Event()
 
 # load env vars
 load_dotenv()
@@ -99,6 +115,35 @@ def get_model_parameters(model_name):
     })
 
 
+@app.route("/api/models/<model_name>", methods=["DELETE"])
+def delete_model(model_name):
+    try:
+        registry = load_registry()
+        model = next((m for m in registry if m.get("name") == model_name or m.get("slug") == model_name), None)
+        if not model:
+            return jsonify({"error": "Model not found"}), 404
+
+        # Remove registry entry
+        registry = [m for m in registry if not (m.get("name") == model.get("name") and m.get("slug") == model.get("slug"))]
+        save_registry(registry)
+
+        # Delete model directory if present
+        try:
+            model_dir = MODELS_DIR / (model.get("slug") or _slugify(model.get("name") or model_name))
+            if model_dir.exists() and model_dir.is_dir():
+                import shutil
+
+                shutil.rmtree(model_dir)
+        except Exception:
+            # Non-fatal: registry entry removed, but cleaning up files failed
+            pass
+
+        return jsonify({"message": "Model deleted"})
+    except Exception as e:
+        print("ERROR deleting model:", e)
+        return jsonify({"error": str(e)}), 400
+
+
 @app.route("/api/models/upload", methods=["POST"])
 def upload_model():
     try:
@@ -120,8 +165,10 @@ def upload_model():
         file.save(str(source_path))
 
         meta = register_model(name, source_path, hyperparams)
+        canonical_flag = bool(meta.get("canonical_used", False))
+        print(f"[upload_model] register_model returned canonical_used={canonical_flag} for '{name}'")
 
-        return jsonify({"message": "Model uploaded", "model": meta})
+        return jsonify({"message": "Model uploaded", "model": meta, "canonical_used": canonical_flag})
     except Exception as e:
         print("Upload failed:", e)
         return jsonify({"error": str(e)}), 400
@@ -140,6 +187,7 @@ def execute_lccde(payload: dict):
     if isinstance(smote_strategy, dict):
         smote_strategy = {int(k): v for k, v in smote_strategy.items()}
 
+    # Pass the global cancel event to the pipeline so it can be interrupted
     results = train_lccde_pipeline(
         file_path=dataset,
         label_col=label_col,
@@ -148,7 +196,8 @@ def execute_lccde(payload: dict):
         test_size=test_size,
         lgb_params=lgb_params,
         xgb_params=xgb_params,
-        cbt_params=cbt_params
+        cbt_params=cbt_params,
+        cancel_event=CANCEL_EVENT,
     )
     return results
 
@@ -157,8 +206,18 @@ def execute_lccde(payload: dict):
 def train_lccde():
     try:
         payload = request.get_json() or {}
-        results = execute_lccde(payload)
-        return jsonify(make_json_safe(results))
+        # mark running
+        global RUNNING_JOBS
+        with RUNNING_LOCK:
+            RUNNING_JOBS += 1
+        # Ensure any previous cancel flag is cleared before starting
+        CANCEL_EVENT.clear()
+        try:
+            results = execute_lccde(payload)
+            return jsonify(make_json_safe(results))
+        finally:
+            with RUNNING_LOCK:
+                RUNNING_JOBS = max(0, RUNNING_JOBS - 1)
     except Exception as e:
         import traceback
         print("ERROR in /train_lccde:", e)
@@ -261,34 +320,52 @@ def get_experiment(run_id):
 
 @app.route("/train_model", methods=["POST"])
 def train_model():
+    # Expose global counter for running jobs
+    global RUNNING_JOBS
     try:
         data = request.get_json() or {}
         model_name = data.get("model_name", "LCCDE")
         dataset = data.get("dataset", "CICIDS2017_sample_km.csv")
 
         if model_name == "LCCDE":
-            results = execute_lccde(data)
-            payload_params = {
-                "dataset": dataset,
-                "lgb_params": data.get("lgb_params"),
-                "xgb_params": data.get("xgb_params"),
-                "cbt_params": data.get("cbt_params"),
-            }
-            run = ModelRun.create_run("LCCDE", payload_params, results.get("lccde"), results.get("duration_s"))
-            return jsonify({
-                "model": "LCCDE",
-                "metrics": make_json_safe(results.get("lccde", {})),
-                "duration_s": results.get("duration_s"),
-                "raw": make_json_safe(results),
-                "run_id": run.id,
-                "created_at": run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else None,
-            })
+            # Mark running
+            with RUNNING_LOCK:
+                RUNNING_JOBS += 1
+            # Ensure cancel flag cleared for this run
+            CANCEL_EVENT.clear()
+            try:
+                results = execute_lccde(data)
+                payload_params = {
+                    "dataset": dataset,
+                    "lgb_params": data.get("lgb_params"),
+                    "xgb_params": data.get("xgb_params"),
+                    "cbt_params": data.get("cbt_params"),
+                }
+                run = ModelRun.create_run("LCCDE", payload_params, results.get("lccde"), results.get("duration_s"))
+                return jsonify({
+                    "model": "LCCDE",
+                    "metrics": make_json_safe(results.get("lccde", {})),
+                    "duration_s": results.get("duration_s"),
+                    "raw": make_json_safe(results),
+                    "run_id": run.id,
+                    "created_at": run.created_at.strftime("%Y-%m-%d %H:%M:%S") if run.created_at else None,
+                })
+            finally:
+                with RUNNING_LOCK:
+                    RUNNING_JOBS = max(0, RUNNING_JOBS - 1)
 
         # Custom model execution
         params = data.get("params") or {}
-        start = time.time()
-        raw_results = run_model(model_name, dataset, params)
-        duration_s = round(time.time() - start, 3)
+        # Mark running
+        with RUNNING_LOCK:
+            RUNNING_JOBS += 1
+        try:
+            start = time.time()
+            raw_results = run_model(model_name, dataset, params)
+            duration_s = round(time.time() - start, 3)
+        finally:
+            with RUNNING_LOCK:
+                RUNNING_JOBS = max(0, RUNNING_JOBS - 1)
 
         normalized = ModelRun.normalize_metrics(raw_results)
         if not normalized:
@@ -318,16 +395,160 @@ def get_datasets():
         base_dir = os.path.dirname(os.path.abspath(__file__))  # backend/
         dataset_dir = os.path.join(base_dir, "..", "src", "IDS-files", "datasets")
 
-        files = [
-            f for f in os.listdir(dataset_dir)
-            if f.lower().endswith(".csv")
-        ]
+        uploads_dir = os.path.join(dataset_dir, 'uploads')
+        files = []
+        if os.path.exists(dataset_dir):
+            for f in os.listdir(dataset_dir):
+                p = os.path.join(dataset_dir, f)
+                if os.path.isfile(p) and f.lower().endswith('.csv'):
+                    files.append(f)
+        if os.path.exists(uploads_dir):
+            for f in os.listdir(uploads_dir):
+                p = os.path.join(uploads_dir, f)
+                if os.path.isfile(p) and f.lower().endswith('.csv'):
+                    # avoid duplicates
+                    if f not in files:
+                        files.append(f)
 
-        return jsonify({"datasets": files})
+        # Also return explicit list of uploaded user files so frontend can
+        # know which files are removable.
+        upload_files = []
+        if os.path.exists(uploads_dir):
+            for f in os.listdir(uploads_dir):
+                p = os.path.join(uploads_dir, f)
+                if os.path.isfile(p) and f.lower().endswith('.csv'):
+                    upload_files.append(f)
+
+        return jsonify({"datasets": files, "uploads": upload_files})
 
     except Exception as e:
         print("Error in /api/datasets:", e)
         return jsonify({"error": "Could not load dataset list"}), 500
+
+
+@app.route('/api/datasets/upload', methods=['POST'])
+def upload_dataset():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'File is required'}), 400
+
+        file = request.files['file']
+        filename = file.filename or ''
+        if not filename.lower().endswith('.csv'):
+            return jsonify({'error': 'Only .csv files are allowed'}), 400
+
+        from werkzeug.utils import secure_filename
+
+        safe_name = secure_filename(filename)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        dataset_dir = os.path.join(base_dir, '..', 'src', 'IDS-files', 'datasets')
+        uploads_dir = os.path.join(dataset_dir, 'uploads')
+        os.makedirs(uploads_dir, exist_ok=True)
+
+        dest_path = os.path.abspath(os.path.join(uploads_dir, safe_name))
+        # Ensure we don't allow path traversal outside the uploads folder
+        if not dest_path.startswith(os.path.abspath(uploads_dir)):
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        file.save(dest_path)
+        return jsonify({'message': 'Uploaded', 'filename': safe_name})
+    except Exception as e:
+        print('ERROR in /api/datasets/upload:', e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/<path:filename>', methods=['DELETE'])
+def delete_dataset(filename):
+    try:
+        # Only allow deleting CSV files inside the datasets directory
+        if not filename.lower().endswith('.csv'):
+            return jsonify({'error': 'Only .csv files can be deleted'}), 400
+
+        from werkzeug.utils import secure_filename
+        safe_name = secure_filename(filename)
+
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        dataset_dir = os.path.join(base_dir, '..', 'src', 'IDS-files', 'datasets')
+        uploads_dir = os.path.join(dataset_dir, 'uploads')
+        target = os.path.abspath(os.path.join(uploads_dir, safe_name))
+        # Only allow deleting files uploaded by users (in uploads_dir)
+        if not target.startswith(os.path.abspath(uploads_dir)):
+            return jsonify({'error': 'Invalid filename'}), 400
+
+        if not os.path.exists(target):
+            return jsonify({'error': 'File not found'}), 404
+
+        try:
+            os.remove(target)
+        except PermissionError:
+            return jsonify({'error': 'Permission denied'}), 403
+
+        return jsonify({'message': 'Deleted', 'filename': safe_name})
+    except Exception as e:
+        print('ERROR in DELETE /api/datasets:', e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/datasets/download', methods=['GET'])
+def download_datasets():
+    try:
+        files = request.args.get('files')
+        if not files:
+            return jsonify({'error': 'No files specified'}), 400
+        names = [n for n in files.split(',') if n]
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        dataset_dir = os.path.join(base_dir, '..', 'src', 'IDS-files', 'datasets')
+        uploads_dir = os.path.join(dataset_dir, 'uploads')
+
+        import zipfile
+        import tempfile
+
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        try:
+            with zipfile.ZipFile(tmp.name, 'w', zipfile.ZIP_DEFLATED) as zf:
+                for name in names:
+                    safe = os.path.basename(name)
+                    # prefer uploads_dir, fallback to dataset_dir
+                    p1 = os.path.abspath(os.path.join(uploads_dir, safe))
+                    p2 = os.path.abspath(os.path.join(dataset_dir, safe))
+                    if os.path.exists(p1) and p1.startswith(os.path.abspath(uploads_dir)):
+                        zf.write(p1, arcname=safe)
+                    elif os.path.exists(p2) and p2.startswith(os.path.abspath(dataset_dir)):
+                        zf.write(p2, arcname=safe)
+                    else:
+                        # skip missing files
+                        continue
+            return send_file(tmp.name, as_attachment=True, download_name='datasets.zip')
+        finally:
+            try:
+                pass
+            except Exception:
+                pass
+    except Exception as e:
+        print('ERROR in /api/datasets/download:', e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/cancel', methods=['POST'])
+def api_cancel():
+    try:
+        CANCEL_EVENT.set()
+        return jsonify({'message': 'Cancellation requested'})
+    except Exception as e:
+        print('ERROR in /api/cancel:', e)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route("/api/running", methods=["GET"])
+def api_running():
+    """Return whether any model runs are currently in progress."""
+    try:
+        with RUNNING_LOCK:
+            running = RUNNING_JOBS > 0
+        return jsonify({"running": running})
+    except Exception as e:
+        print("Error in /api/running:", e)
+        return jsonify({"running": False}), 500
 
 @app.route("/api/confusion/<int:run_id>")
 def get_confusion_matrix(run_id):

@@ -18,10 +18,21 @@ import time
 DATASET_DIR = os.path.join(os.path.dirname(__file__), "../src/IDS-files/datasets")
 
 def resolve_dataset_path(filename):
-    path = os.path.join(DATASET_DIR, filename)
-    if not os.path.exists(path):
-        raise FileNotFoundError(f"Dataset not found at {path}")
-    return path
+    # Prefer dataset in the canonical datasets dir, but fall back to uploads/
+    # so user-uploaded files are found without requiring a move.
+    candidate = os.path.join(DATASET_DIR, filename)
+    if os.path.exists(candidate):
+        return candidate
+
+    uploads_candidate = os.path.join(DATASET_DIR, "uploads", filename)
+    if os.path.exists(uploads_candidate):
+        return uploads_candidate
+
+    # As a last resort, if an absolute or relative path was provided, check that too
+    if os.path.exists(filename):
+        return filename
+
+    raise FileNotFoundError(f"Dataset not found. Checked: {candidate}, {uploads_candidate}, and provided path '{filename}'")
 
 def prepare_data(file_path='./CICIDS2017_sample_km.csv', label_col='Label', smote_strategy=None, random_state=0, test_size=0.2):
     try:
@@ -131,9 +142,12 @@ def find_leading_models(f1_scores, models):
     return class_leaders
 
 # Still the same thing as the notebook, just with a few restructures that I've noted below
-def LCCDE(X_test, y_test, models, class_leaders):
+def LCCDE(X_test, y_test, models, class_leaders, cancel_event=None):
     yt, yp = [], []
     for xi, yi in stream.iter_pandas(X_test, y_test):
+        # Check for cancellation signal between streaming iterations
+        if cancel_event is not None and getattr(cancel_event, 'is_set', lambda: False)():
+            raise RuntimeError('Run cancelled')
         xi2 = pd.DataFrame([xi])
         preds = [int(m.predict(xi2)[0]) for m in models] # Equivalent to the 'y_predx' values, only this time as a list
         probs = [m.predict_proba(xi2) for m in models] # Equivalent to the 'px' values, only this time as a list
@@ -165,24 +179,37 @@ def train_lccde_pipeline(
         smote_strategy=None,
         random_state=0,
         test_size=0.2,
-        lgb_params=None, xgb_params=None, cbt_params=None
+        lgb_params=None, xgb_params=None, cbt_params=None,
+        cancel_event=None
     ):
     start = time.time()
 
     file_path = resolve_dataset_path(file_path)
     X_train, X_test, y_train, y_test = prepare_data(file_path, label_col, smote_strategy, random_state, test_size)
+    # Allow early cancellation after data prep
+    if cancel_event is not None and getattr(cancel_event, 'is_set', lambda: False)():
+        raise RuntimeError('Run cancelled')
     lg, xg, cb = train_base_models(X_train, y_train, lgb_params, xgb_params, cbt_params)
+    # Check cancellation after training base models
+    if cancel_event is not None and getattr(cancel_event, 'is_set', lambda: False)():
+        raise RuntimeError('Run cancelled')
     models = {'lg': lg, 'xg': xg, 'cb': cb}
     base_eval = evaluate_models(models, X_test, y_test)
+    if cancel_event is not None and getattr(cancel_event, 'is_set', lambda: False)():
+        raise RuntimeError('Run cancelled')
     f1_scores = {k: v['f1_per_class'] for k, v in base_eval.items()}
     class_leaders = find_leading_models(f1_scores, models)
-    yt, yp = LCCDE(X_test, y_test, [lg, xg, cb], class_leaders)
+    # Pass cancel_event into the streaming evaluation so it can be interrupted
+    yt, yp = LCCDE(X_test, y_test, [lg, xg, cb], class_leaders, cancel_event=cancel_event)
 
     lccde_metrics = {
         'accuracy': accuracy_score(yt, yp),
         'precision': precision_score(yt, yp, average='weighted'),
         'recall': recall_score(yt, yp, average='weighted'),
         'f1_weighted': f1_score(yt, yp, average='weighted'),
+        # Provide a simple alias `f1` for backward compatibility with frontend
+        # which expects `metrics.f1`.
+        'f1': f1_score(yt, yp, average='weighted'),
         'f1_per_class': f1_score(yt, yp, average=None),
     }
 

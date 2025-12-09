@@ -1,11 +1,11 @@
 [
   {
     "id": 1,
-    "name": "MTH_IDS_IoTJ",
-    "slug": "mth_ids_iotj",
+    "name": "MTH",
+    "slug": "mth",
     "type": "custom",
-    "source_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\mth_ids_iotj\\MTH_IDS_IoTJ.ipynb",
-    "entry_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\mth_ids_iotj\\mth_ids_iotj.py",
+    "source_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\mth\\MTH.py",
+    "entry_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\mth\\MTH.py",
     "hyperparams": {
       "n_estimators": 30,
       "learning_rate": 0.19229249758051492,

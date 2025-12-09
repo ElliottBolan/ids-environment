@@ -21,3 +21,11 @@ xgboost
 river
 statistics
 cryptography
+numpy
+pandas
+seaborn
+matplotlib
+hyperopt
+scikit-optimize
+imbalanced-learn
+scipy
