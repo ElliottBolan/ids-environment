@@ -16,5 +16,29 @@
       "max_features": 20,
       "criterion": "entropy"
     }
+  },
+  {
+    "id": 2,
+    "name": "LCCDE",
+    "slug": "lccde",
+    "type": "custom",
+    "source_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\lccde\\LCCDE.py",
+    "entry_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\lccde\\LCCDE.py",
+    "hyperparams": {
+      "verbose": 0,
+      "boosting_type": "Plain"
+    }
+  },
+  {
+    "id": 3,
+    "name": "Tree-based_IDS_GlobeCom19",
+    "slug": "tree-based_ids_globecom19",
+    "type": "custom",
+    "source_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\tree-based_ids_globecom19\\Tree-based_IDS_GlobeCom19.ipynb",
+    "entry_file": "C:\\Users\\dudee\\Documents\\VSCodePrograms\\ids-environment\\backend\\uploads\\models\\tree-based_ids_globecom19\\tree-based_ids_globecom19.py",
+    "hyperparams": {
+      "random_state": 0,
+      "n_estimators": 10
+    }
   }
 ]

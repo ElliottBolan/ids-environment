@@ -143,14 +143,47 @@ export default function Results() {
                 Duration: {activeRun?.duration_s ?? "—"} s
               </div>
 
-              {/* Metrics Panel */}
-              <div className="wf-metrics">
-                {metricLine("Accuracy", activeRun.results?.accuracy)}
-                {metricLine("Precision", activeRun.results?.precision)}
-                {metricLine("Recall", activeRun.results?.recall)}
-                {metricLine("F1", activeRun.results?.f1)}
-              </div>
+              {/* One panel per result set. An LCCDE run produces four: the three
+                  base learners plus the ensemble that combines them. */}
+              {resultSets(activeRun).map((set) => (
+                <div key={set.key} className="card" style={{ marginTop: 16, padding: 16 }}>
+                  <h3 style={{ marginBottom: 8 }}>{set.label}</h3>
 
+                  <div className="wf-metrics">
+                    {metricLine("Accuracy", set.accuracy)}
+                    {metricLine("Precision", set.precision)}
+                    {metricLine("Recall", set.recall)}
+                    {metricLine("F1", set.f1)}
+                  </div>
+
+                  {hasMatrix(activeRun, set.key) ? (
+                    <div style={{ marginTop: 12 }}>
+                      <img
+                        alt={`confusion-matrix-${set.key}`}
+                        src={`${API_BASE}/api/confusion/${activeRun.id}?source=${encodeURIComponent(set.key)}`}
+                        style={{ maxWidth: "100%", border: "1px solid #ddd" }}
+                      />
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          className="btn"
+                          onClick={() =>
+                            window.open(
+                              `${API_BASE}/api/confusion/${activeRun.id}?source=${encodeURIComponent(set.key)}`,
+                              "_blank"
+                            )
+                          }
+                        >
+                          Open Full Size
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="muted" style={{ marginTop: 12 }}>
+                      No confusion matrix stored for this result set.
+                    </div>
+                  )}
+                </div>
+              ))}
               <button
                 className="btn btn-lg"
                 onClick={() => (window.location.hash = "#/compare")}
@@ -306,6 +339,32 @@ export default function Results() {
 }
 
 /* ---------- Helpers ---------- */
+// Runs saved before per-model results existed only have the flat top-level
+// metrics, so fall back to showing those as a single set.
+function resultSets(run) {
+  const perModel = run?.results?.per_model;
+  if (Array.isArray(perModel) && perModel.length > 0) return perModel;
+
+  return [
+    {
+      key: "top",
+      label: run?.model_name || "Results",
+      accuracy: run?.results?.accuracy,
+      precision: run?.results?.precision,
+      recall: run?.results?.recall,
+      f1: run?.results?.f1,
+    },
+  ];
+}
+
+function hasMatrix(run, key) {
+  const stored = run?.confusion_matrices || [];
+  if (stored.length === 0) return false;
+  // A single-set run stores its matrix under "top" regardless of the label.
+  if (stored.some((c) => c.source === key)) return true;
+  return key === "top" && stored.some((c) => c.source === "top");
+}
+
 function metricLine(label, val) {
   return (
     <div>

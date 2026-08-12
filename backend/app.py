@@ -7,7 +7,8 @@ from LCCDE import train_lccde_pipeline
 from sqlalchemy import cast, String
 import os
 import time
-from models import db, ModelRun
+import tempfile
+from models import db, ModelRun, ConfusionMatrix
 from utils.confusion_matrix import generate_confusion_matrix_image
 from utils.custom_models import (
     list_models,
@@ -76,7 +77,7 @@ def hello_world():
 # --- MOCK DATA ---
 AVAILABLE_MODELS = ["LCCDE"]
 
-MODEL_PARAMETERS = { 
+MODEL_PARAMETERS = {
     "LCCDE": {
         "learning_rate": 0.01,
         "batch_size": 32,
@@ -85,16 +86,69 @@ MODEL_PARAMETERS = {
     }
 }
 
+# Models implemented natively in the backend. A user-uploaded model sharing one
+# of these names is shadowed by the builtin so it only appears once in the UI:
+# /train_model always routes these names to the builtin pipeline anyway.
+BUILTIN_MODEL_NAMES = {"lccde"}
+
+# The LCCDE pipeline trains three base learners and then combines them, so a
+# single run yields four independent sets of metrics.
+LCCDE_RESULT_SETS = (
+    ("lccde", "LCCDE (ensemble)"),
+    ("lg", "LightGBM"),
+    ("xg", "XGBoost"),
+    ("cb", "CatBoost"),
+)
+
+LABELS_BY_SOURCE = dict(LCCDE_RESULT_SETS)
+
+
+def _metric_set(key, label, metrics):
+    """Flatten one model's metrics into the shape the frontend renders."""
+    metrics = metrics or {}
+    return {
+        "key": key,
+        "label": label,
+        "accuracy": metrics.get("accuracy"),
+        "precision": metrics.get("precision"),
+        "recall": metrics.get("recall"),
+        "f1": metrics.get("f1_weighted") or metrics.get("f1"),
+    }
+
+
+def build_lccde_result_sets(raw):
+    """Build the four per-model metric sets from a train_lccde_pipeline result."""
+    base = (raw or {}).get("base") or {}
+    sets = []
+    for key, label in LCCDE_RESULT_SETS:
+        metrics = raw.get("lccde") if key == "lccde" else base.get(key)
+        if metrics:
+            sets.append(_metric_set(key, label, metrics))
+    return sets
+
 # --- API ROUTES ---
 # List the available ML-based IDS models (just LCCDE for now)
 @app.route("/api/models", methods=["GET"])
 def get_models():
-    custom = list_models()
-    names = [m.get("name") for m in custom]
+    # Hide uploaded models that collide with a builtin name (e.g. a user-uploaded
+    # "LCCDE") so each model is listed exactly once.
+    custom = [m for m in list_models() if (m.get("name") or "").lower() not in BUILTIN_MODEL_NAMES]
+
+    # Guard against two uploads sharing a name as well.
+    seen = set(BUILTIN_MODEL_NAMES)
+    unique_custom = []
+    for m in custom:
+        key = (m.get("name") or "").lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_custom.append(m)
+
+    names = [m.get("name") for m in unique_custom]
     return jsonify({
         "models": [
             {"name": "LCCDE", "type": "ensemble", "hyperparams": MODEL_PARAMETERS["LCCDE"]}
-        ] + custom,
+        ] + unique_custom,
         "names": ["LCCDE"] + names
     })
 
@@ -341,10 +395,23 @@ def train_model():
                     "xgb_params": data.get("xgb_params"),
                     "cbt_params": data.get("cbt_params"),
                 }
-                run = ModelRun.create_run("LCCDE", payload_params, results.get("lccde"), results.get("duration_s"))
+                # One LCCDE run produces four result sets: the three base
+                # learners plus the ensemble that combines them.
+                result_sets = build_lccde_result_sets(results)
+                stored_results = dict(ModelRun.normalize_metrics(results.get("lccde") or {}))
+                stored_results["per_model"] = result_sets
+
+                run = ModelRun.create_run_with_raw(
+                    "LCCDE",
+                    payload_params,
+                    stored_results,
+                    results.get("duration_s"),
+                    raw_results=make_json_safe(results),
+                )
                 return jsonify({
                     "model": "LCCDE",
                     "metrics": make_json_safe(results.get("lccde", {})),
+                    "per_model": make_json_safe(result_sets),
                     "duration_s": results.get("duration_s"),
                     "raw": make_json_safe(results),
                     "run_id": run.id,
@@ -371,11 +438,22 @@ def train_model():
         if not normalized:
             raise ValueError("Custom model must return metrics with accuracy/precision/recall/f1")
 
-        run = ModelRun.create_run(model_name, {"dataset": dataset, **params}, normalized, duration_s)
+        # Custom models report a single result set; keep the same shape as LCCDE
+        # so the frontend renders both the same way.
+        normalized["per_model"] = [_metric_set("top", model_name, normalized)]
+
+        run = ModelRun.create_run_with_raw(
+            model_name,
+            {"dataset": dataset, **params},
+            normalized,
+            duration_s,
+            raw_results=make_json_safe(raw_results),
+        )
 
         return jsonify({
             "model": model_name,
             "metrics": make_json_safe(normalized),
+            "per_model": make_json_safe(normalized["per_model"]),
             "duration_s": duration_s,
             "raw": make_json_safe(raw_results),
             "run_id": run.id,
@@ -557,28 +635,43 @@ def get_confusion_matrix(run_id):
     if not run:
         return jsonify({"error": "Experiment not found"}), 404
 
-    results = run.results or {}
+    # Each result set has its own matrix, selected via ?source=lccde|lg|xg|cb.
+    source = request.args.get("source")
 
-    # Try all known structures
-    report = None
+    query = ConfusionMatrix.query.filter_by(run_id=run_id)
+    if source:
+        query = query.filter_by(source=source)
+    stored = query.order_by(ConfusionMatrix.id.asc()).first()
 
-    # Case 1: nested (base/cb/classification_report)
+    report = stored.report if stored else None
+    label = (stored.source if stored else None) or source
+
+    # Fall back to reports embedded in older runs' results.
+    if not report:
+        results = run.results or {}
+        legacy = None
+        try:
+            legacy = results["base"][source or "cb"].get("classification_report")
+        except Exception:
+            pass
+        if not legacy:
+            legacy = results.get("classification_report")
+        report = legacy
+
+    if not report:
+        return jsonify({"error": "No confusion matrix found for this experiment"}), 404
+
+    title = f"Confusion Matrix — {LABELS_BY_SOURCE.get(label, label)}" if label else "Confusion Matrix"
+
+    # tempfile keeps this working on Windows, where "/tmp" does not resolve.
+    out_path = os.path.join(
+        tempfile.gettempdir(), f"cm_{run_id}_{label or 'default'}.png"
+    )
     try:
-        report = results["base"]["cb"].get("classification_report")
-    except:
-        pass
-
-    # Case 2: direct classification_report
-    if not report:
-        report = results.get("classification_report")
-
-    # Case 3: missing report → no confusion matrix available
-    if not report:
-        return jsonify({"error": "No classification report found for this experiment"}), 400
-
-    # Proceed generating image
-    out_path = f"/tmp/cm_{run_id}.png"
-    generate_confusion_matrix_image(report, out_path)
+        generate_confusion_matrix_image(report, out_path, title=title)
+    except Exception as e:
+        print("ERROR generating confusion matrix:", e)
+        return jsonify({"error": f"Could not render confusion matrix: {e}"}), 400
 
     return send_file(out_path, mimetype="image/png")
 

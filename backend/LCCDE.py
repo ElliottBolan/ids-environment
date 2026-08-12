@@ -114,6 +114,20 @@ def train_base_models(X_train, y_train, lgb_params=None, xgb_params=None, cbt_pa
     cb.fit(X_train, y_train)
     return lg, xg, cb
 
+# Capture the real confusion matrix so the UI never has to approximate one
+# from the classification report.
+def confusion_payload(y_true, y_pred):
+    # CatBoost returns predictions with shape (n, 1) for multiclass, so flatten
+    # both sides before comparing them.
+    y_true = np.asarray(y_true).ravel()
+    y_pred = np.asarray(y_pred).ravel()
+    labels = np.unique(np.concatenate([y_true, y_pred]))
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    return {
+        'labels': [int(l) if isinstance(l, (int, np.integer)) else str(l) for l in labels],
+        'matrix': cm.tolist(),
+    }
+
 # This function almost does the same thing, but we'll ignore the visual plots for now
 def evaluate_models(models, X_test, y_test):
     results = dict()
@@ -124,6 +138,7 @@ def evaluate_models(models, X_test, y_test):
             y_pred = model.predict(X_test)
         results[name] = {
             'classification_report': classification_report(y_test, y_pred, output_dict=True),
+            'confusion_matrix': confusion_payload(y_test, y_pred),
             'accuracy': accuracy_score(y_test, y_pred),
             'precision': precision_score(y_test, y_pred, average='weighted'),
             'recall': recall_score(y_test, y_pred, average='weighted'),
@@ -203,6 +218,10 @@ def train_lccde_pipeline(
     yt, yp = LCCDE(X_test, y_test, [lg, xg, cb], class_leaders, cancel_event=cancel_event)
 
     lccde_metrics = {
+        # The ensemble gets the same report/matrix treatment as the base models
+        # so every result set can render a confusion matrix.
+        'classification_report': classification_report(yt, yp, output_dict=True),
+        'confusion_matrix': confusion_payload(yt, yp),
         'accuracy': accuracy_score(yt, yp),
         'precision': precision_score(yt, yp, average='weighted'),
         'recall': recall_score(yt, yp, average='weighted'),
